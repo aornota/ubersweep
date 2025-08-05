@@ -1,4 +1,4 @@
-module App
+module Aornota.Ubersweep.App
 
 open Elmish
 open Elmish.React

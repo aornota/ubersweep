@@ -1,9 +1,8 @@
-module Client.Tests
+module Aornota.Ubersweep.Client.Tests
 
+open Aornota.Ubersweep.Index
+open Aornota.Ubersweep.Shared
 open Fable.Mocha
-
-open Index
-open Shared
 open SAFE
 
 let client =
@@ -29,10 +28,10 @@ let client =
 
 let all =
     testList "All" [
-        #if FABLE_COMPILER // This preprocessor directive makes editor happy
-        Shared.Tests.shared
+#if FABLE_COMPILER // This preprocessor directive makes editor happy
+        Tests.shared
 #endif
-                client
+        client
     ]
 
 [<EntryPoint>]

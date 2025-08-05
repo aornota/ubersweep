@@ -1,12 +1,12 @@
-module Shared.Tests
+module Aornota.Ubersweep.Shared.Tests
+
+open Aornota.Ubersweep.Shared
 
 #if FABLE_COMPILER
 open Fable.Mocha
 #else
 open Expecto
 #endif
-
-open Shared
 
 let shared =
     testList "Shared" [

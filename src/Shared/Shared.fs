@@ -1,4 +1,4 @@
-namespace Shared
+namespace Aornota.Ubersweep.Shared
 
 open System
 

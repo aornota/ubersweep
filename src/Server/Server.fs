@@ -1,8 +1,8 @@
-module Server
+module Aornota.Ubersweep.Server
 
+open Aornota.Ubersweep.Shared
 open SAFE
 open Saturn
-open Shared
 
 module Storage =
     let todos =

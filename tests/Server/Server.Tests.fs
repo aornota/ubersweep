@@ -1,9 +1,8 @@
-module Server.Tests
+module Aornota.Ubersweep.Server.Tests
 
+open Aornota.Ubersweep.Shared
+open Aornota.Ubersweep.Server
 open Expecto
-
-open Shared
-open Server
 
 let server =
     testList "Server" [
@@ -18,7 +17,7 @@ let server =
             Expect.contains Storage.todos validTodo "Storage should contain new todo"
     ]
 
-let all = testList "All" [ Shared.Tests.shared; server ]
+let all = testList "All" [ Tests.shared; server ]
 
 [<EntryPoint>]
 let main _ = runTestsWithCLIArgs [] [||] all
