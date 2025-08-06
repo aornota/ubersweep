@@ -4,10 +4,17 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />
-    <Compile Include="Server.fs" />
+    <Compile Include="Common\JsonConverter.fs" />
+    <Compile Include="Persistence\ValidPathCharsString.fs" />
+    <Compile Include="Persistence\Types.fs" />
+    <Compile Include="Persistence\FileReaderAndWriter.fs" />
+    <Compile Include="Persistence\FilePersistenceFactory.fs" />
+    <Compile Include="TEMP-Storage.fs" />
+    <Compile Include="EntryPoint.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Shared\Shared.fsproj" />

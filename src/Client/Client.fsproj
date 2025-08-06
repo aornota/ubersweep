@@ -9,8 +9,8 @@
         <None Include="tailwind.config.js" />
         <None Include="index.html" />
         <None Include="paket.references" />
-        <Compile Include="Index.fs" />
-        <Compile Include="App.fs" />
+        <Compile Include="TEMP-Index.fs" />
+        <Compile Include="TEMP-App.fs" />
         <None Include="vite.config.mts" />
     </ItemGroup>
     <ItemGroup>

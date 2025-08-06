@@ -1,7 +1,9 @@
-module Aornota.Ubersweep.Client.Tests
+[<RequireQualifiedAccess>]
+module Aornota.Ubersweep.Tests.Client.TEMP.Server.Client
 
-open Aornota.Ubersweep.Index
-open Aornota.Ubersweep.Shared
+open Aornota.Ubersweep.Client.TEMP
+open Aornota.Ubersweep.Shared.TEMP
+
 open Fable.Mocha
 open SAFE
 
@@ -9,9 +11,9 @@ let client =
     testList "Client" [
         testCase "Added todo"
         <| fun _ ->
-            let newTodo = Todo.create "new todo"
-            let model, _ = init ()
-            let model, _ = update (SaveTodo(Finished [ newTodo ])) model
+            let newTodo = Shared.create "new todo"
+            let model, _ = Index.init ()
+            let model, _ = Index.update (Index.SaveTodo(Finished [ newTodo ])) model
 
             Expect.equal
                 (model.Todos |> RemoteData.map _.Length |> RemoteData.defaultValue 0)
@@ -21,7 +23,7 @@ let client =
             Expect.equal
                 (model.Todos
                  |> RemoteData.map List.head
-                 |> RemoteData.defaultValue (Todo.create ""))
+                 |> RemoteData.defaultValue (Shared.create ""))
                 newTodo
                 "Todo should equal new todo"
     ]
@@ -29,7 +31,7 @@ let client =
 let all =
     testList "All" [
 #if FABLE_COMPILER // This preprocessor directive makes editor happy
-        Tests.shared
+        Aornota.Ubersweep.Tests.Shared.TEMP.Shared.Tests.shared
 #endif
         client
     ]

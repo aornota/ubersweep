@@ -1,8 +1,7 @@
-module Aornota.Ubersweep.App
+[<RequireQualifiedAccess>]
+module Aornota.Ubersweep.Client.TEMP.App
 
 open Elmish
-open Elmish.React
-
 open Fable.Core.JsInterop
 
 importSideEffects "./index.css"
@@ -16,5 +15,4 @@ Program.mkProgram Index.init Index.update Index.view
 |> Program.withConsoleTrace
 #endif
 |> Program.withReactSynchronous "elmish-app"
-
 |> Program.run

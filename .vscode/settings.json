@@ -1,4 +1,5 @@
 {
+    "editor.fontSize": 13,
     "tailwindCSS.includeLanguages": {
         "fsharp": "html"
     },
@@ -7,28 +8,27 @@
         ["\\.className\\s+\\[([^\\]]*)\\]", "\"([^\"]*)\""]
     ],
     "files.exclude": {
+        "**/.editorconfig": true,
+        "**/.fantomasignore": true,
         "**/.git": true,
-        "**/.svn": true,
-        "**/.hg": true,
-        "**/CVS": true,
-        "**/.DS_Store": true,
-        "**/Thumbs.db": true,
-        "**/.vs": true,
-        "**/.vscode": true,
-        "**/.idea": true,
-        "**/.ionide": true,
+        "**/.npmrc": true,
         "**/.paket": true,
-        "**/.fake": true,
-        "**/.farmer": true,
-        "**/paket-files": true,
-        "**/node_modules": true,
+        "**/.vscode/extensions.json": true,
+        "**/Application.sln": true,
         "**/bin": true,
+        "**/deploy": true,
+        "**/LICENSE": true,
+        "**/node_modules": true,
         "**/obj": true,
         "**/output": true,
-        "**/deploy": true,
+        "**/package-lock.json": true,
+        "**/paket.lock": true,
+        "**/paket-files": true,
+        "**/persisted": true,
+        "**/secret": true,
     },
-"	[fsharp]": {
-		"editor.formatOnSave": true,
-		"editor.defaultFormatter": "Ionide.Ionide-fsharp"
-	}
- }
+    "[fsharp]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "Ionide.Ionide-fsharp"
+    }
+}

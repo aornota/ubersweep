@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />
-    <Compile Include="Shared.Tests.fs" />
+    <Compile Include="TEMP-Shared.Tests.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Shared\Shared.fsproj" />

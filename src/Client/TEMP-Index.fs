@@ -1,20 +1,22 @@
-module Aornota.Ubersweep.Index
+[<RequireQualifiedAccess>]
+module Aornota.Ubersweep.Client.TEMP.Index
 
-open Aornota.Ubersweep.Shared
+open Aornota.Ubersweep.Shared.TEMP
+
 open Elmish
 open SAFE
 
 type Model = {
-    Todos: RemoteData<Todo list>
+    Todos: RemoteData<Shared.Todo list>
     Input: string
 }
 
 type Msg =
     | SetInput of string
-    | LoadTodos of ApiCall<unit, Todo list>
-    | SaveTodo of ApiCall<string, Todo list>
+    | LoadTodos of ApiCall<unit, Shared.Todo list>
+    | SaveTodo of ApiCall<string, Shared.Todo list>
 
-let todosApi = Api.makeProxy<ITodosApi> ()
+let todosApi = Api.makeProxy<Shared.ITodosApi> ()
 
 let init () =
     let initialModel = { Todos = NotStarted; Input = "" }
@@ -40,7 +42,7 @@ let update msg model =
         match msg with
         | Start todoText ->
             let saveTodoCmd =
-                let todo = Todo.create todoText
+                let todo = Shared.create todoText
                 Cmd.OfAsync.perform todosApi.addTodo todo (Finished >> SaveTodo)
 
             { model with Input = "" }, saveTodoCmd
@@ -72,7 +74,7 @@ module ViewComponents =
                 Html.button [
                     prop.className
                         "flex-no-shrink p-2 px-12 rounded bg-teal-600 outline-none focus:ring-2 ring-teal-300 font-bold text-white hover:bg-teal disabled:opacity-30 disabled:cursor-not-allowed text-sm sm:text-base"
-                    prop.disabled (Todo.isValid model.Input |> not)
+                    prop.disabled (Shared.isValid model.Input |> not)
                     prop.onClick (fun _ -> dispatch (SaveTodo(Start model.Input)))
                     prop.text "Add"
                 ]

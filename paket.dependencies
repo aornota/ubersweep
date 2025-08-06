@@ -3,9 +3,11 @@ framework: net8.0
 storage: none
 
 nuget Expecto ~> 9
+nuget FsToolkit.ErrorHandling
 nuget SAFE.Server ~> 5
 nuget SAFE.Client ~> 5
 
 nuget Fake.Core.Target ~> 5
 nuget Fake.IO.FileSystem ~> 5
 nuget Farmer ~> 1
+nuget Thoth.Json.Net
