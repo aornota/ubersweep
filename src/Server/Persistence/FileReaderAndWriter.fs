@@ -36,31 +36,74 @@ type FileReaderAndWriter
         | Some partitionKey -> Path.Combine(root, partitionKey, entityKey)
         | None -> Path.Combine(root, entityKey)
 
-    let tryRead guid =
+    let tryRead (guid: Guid) =
+        let rec checkConsistency entries lastRvn lastWasSnapshot =
+            match entries with
+            | h :: t ->
+                match h with
+                | EventJson(rvn, _, _, _) ->
+                    if rvn.IsValidNextRvn lastRvn then
+                        checkConsistency t (Some rvn) (Some false)
+                    else
+                        Error $"{nameof EventJson} with {rvn} inconsistent with previous entry ({lastRvn})"
+                | SnapshotJson(rvn, _) ->
+                    match lastWasSnapshot, lastRvn with
+                    | Some true, _ ->
+                        Error $"{nameof SnapshotJson} with {rvn} but previous entry was also {nameof SnapshotJson}"
+                    | _, Some lastRvn ->
+                        if rvn = lastRvn then
+                            checkConsistency t (Some rvn) (Some true)
+                        else
+                            Error $"{nameof SnapshotJson} with {rvn} not equal to previous entry ({lastRvn})"
+                    | _, None -> Error $"{nameof SnapshotJson} with {rvn} but no previous entry"
+            | [] -> Ok()
+
+        let rec fromLastSnapshot entries acc =
+            match entries with
+            | h :: t ->
+                match h with
+                | EventJson _ -> fromLastSnapshot t (h :: acc)
+                | SnapshotJson _ -> h :: acc
+            | [] -> acc
+
         try
-            let file = FileInfo(Path.Combine(path, $"{guid.ToString()}.{fileExtension}"))
+            let guid = guid.ToString() // intentionally shadow as only need string representation
+            let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))
 
             if not (File.Exists file.FullName) then
-                Error "TODO..." // Error(FileDoesNotExist(path, guid))
+                Error $"File does not exist when reading {guid} for {path}"
             else
                 match File.ReadAllLines file.FullName |> List.ofArray with
-                | [] -> Error "TODO..." // Error(FileIsEmpty(path, guid))
+                | [] -> Error $"File exists but is empty when reading {guid} for {path}"
                 | lines ->
-                    (* TODO: Implement this - and check for specific errors:
-                        fromJson<Entry> errors
-                        FileHasInconsistentRvns *)
-                    let deserializableLines =
-                        lines
-                        |> List.choose (fun line ->
-                            match fromJson<Entry> (Json line) with
-                            | Ok entry -> Some entry
-                            | Error _ -> None)
+                    let deserializationResults =
+                        lines |> List.map (fun line -> fromJson<Entry> (Json line))
 
-                    match deserializableLines with
-                    | [] -> failwith $"TODO: No deserializable lines..."
-                    | _ -> Ok(deserializableLines)
+                    match
+                        deserializationResults
+                        |> List.choose (fun result ->
+                            match result with
+                            | Ok _ -> None
+                            | Error error -> Some error)
+                    with
+                    | h :: _ ->
+                        Error
+                            $"At least one entry caused a deserialization error when reading {guid} for {path} (e.g. {h})"
+                    | _ ->
+                        let entries =
+                            deserializationResults
+                            |> List.choose (fun result ->
+                                match result with
+                                | Ok entry -> Some entry
+                                | Error _ -> None)
+
+                        match checkConsistency entries None None with
+                        | Ok _ ->
+                            // If there are any snapshots, only return the last snapshot and subsequent entries (if any)
+                            Ok(fromLastSnapshot (entries |> List.rev) [])
+                        | Error error -> Error $"Consistency check failed when reading {guid} for {path}: {error}"
         with exn ->
-            Error "TODO..." // Error(OtherReaderError(exn, path, Some guid))
+            Error $"Unexpected error reading {guid} for {path}: {exn.Message}"
 
     let tryReadAll () =
         try
@@ -77,27 +120,32 @@ type FileReaderAndWriter
                     files
                     |> List.choose (fun (file, guid) -> if guid.IsNone then Some file else None)
                 with
-                | h :: t -> [ Error "TODO..." ] // Error(FilesWithNonGuidNames(path, h :: t |> List.map _.Name)) ]
+                | h :: _ -> [
+                    Error $"At least one .{fileExtension} file in {path} has a non-{nameof Guid} name (e.g. {h.Name})"
+                  ]
                 | _ -> files |> List.choose snd |> List.map tryRead
             else
-                [ Error "TODO..." ] // Error(DirectoryDoesNotExist path) ]
-        with exn -> [ Error "TODO..." ] // Error(OtherReaderError(exn, path, None)) ]
+                try
+                    Directory.CreateDirectory path |> ignore
+                    []
+                with exn -> [ Error $"Error creating {path} when reading all: {exn.Message}" ]
+        with exn -> [ Error $"Unexpected error reading all for {path}: {exn.Message}" ]
 
-    let tryWrite (guid, rvn: Rvn, auditUserId: UserId, eventJson: Json, getSnapshot) =
+    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: UserId, eventJson: Json, getSnapshot) =
         try
-            let file = FileInfo(Path.Combine(path, $"{guid.ToString()}.{fileExtension}"))
+            let guid = guid.ToString() // intentionally shadow as only need string representation
+            let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))
             let utcNow = clock.GetUtcNow()
 
             match rvn.IsInitialRvn, File.Exists file.FullName with
-            | true, true -> Error "TODO..." // Error(InitialRvnButFileAlreadyExists(path, guid))
-            | false, false -> Error "TODO..." // Error(NotInitialRvnButFileDoesNotExist(path, guid, rvn))
+            | true, true -> Error $"File already exists when writing initial ({rvn}) for {guid} in {path}"
+            | false, false -> Error $"File does not exist when writing non-initial ({rvn}) for {guid} in {path}"
             | true, false ->
                 let (Json eventJson') = toJson (EventJson(rvn, utcNow, auditUserId, eventJson))
                 File.WriteAllLines(file.FullName, [| eventJson' |])
                 Ok()
             | false, true ->
-                (* TODO: Implement this - and check for specific errors:
-                    fromJson<Entry> errors *)
+                // Check that the Rvn of the last entry is consistent with the Rvn being written. (Note that unlike when reading, we do not check the consistency of the Rvns for all existing entries.)
                 match File.ReadAllLines file.FullName |> List.ofArray |> List.rev with
                 | lastLine :: _ ->
                     match fromJson<Entry> (Json lastLine) with
@@ -116,11 +164,12 @@ type FileReaderAndWriter
                             File.AppendAllLines(file.FullName, lines)
                             Ok()
                         else
-                            Error "TODO..." // Error(RvnNotConsistentWithPreviousRvn(path, guid, rvn, entry.Rvn))
-                    | Error error -> Error "TODO..." // Error error -> failwith error // TODO: Deserialization error...
-                | [] -> Error "TODO..." // Error(NotInitialRvnButFileIsEmpty(path, guid, rvn))
+                            Error $"Previous ({entry.Rvn}) not consistent when writing {rvn} for {guid} in {path}"
+                    | Error error ->
+                        Error $"Deserialization error for last entry when writing {rvn} for {guid} in {path}: {error}"
+                | [] -> Error $"File exists but is empty when writing non-initial {rvn} for {guid} in {path}"
         with exn ->
-            Error "TODO..." // Error(OtherWriterError(exn, path, guid, rvn))
+            Error $"Unexpected error writing {rvn} for {guid} in {path}: {exn.Message}"
 
     let agent =
         MailboxProcessor.Start(fun inbox ->
