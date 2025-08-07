@@ -13,6 +13,7 @@
     <Compile Include="Persistence\PersistenceClock.fs" />
     <Compile Include="Persistence\FileReaderAndWriter.fs" />
     <Compile Include="Persistence\FilePersistenceFactory.fs" />
+    <Compile Include="Persistence\Mapper.fs" />
     <Compile Include="TEMP-Storage.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>

@@ -9,12 +9,12 @@ open System
 open System.IO
 
 type private Input =
-    | Read of guid: Guid * reply: AsyncReplyChannel<Result<Entry list, string>>
-    | ReadAll of reply: AsyncReplyChannel<Result<Entry list, string> list>
+    | Read of guid: Guid * reply: AsyncReplyChannel<Result<NonEmptyList<Entry>, string>>
+    | ReadAll of reply: AsyncReplyChannel<Result<NonEmptyList<Entry>, string> list>
     | Write of
         guid: Guid *
         rvn: Rvn *
-        auditUserId: UserId *
+        auditUserId: EntityId<User> *
         eventJson: Json *
         getSnapsot: GetSnapshot *
         reply: AsyncReplyChannel<Result<unit, string>>
@@ -100,7 +100,8 @@ type FileReaderAndWriter
                         match checkConsistency entries None None with
                         | Ok _ ->
                             // If there are any snapshots, only return the last snapshot and subsequent entries (if any)
-                            Ok(fromLastSnapshot (entries |> List.rev) [])
+                            let entries = fromLastSnapshot (entries |> List.rev) []
+                            NonEmptyList<Entry>.FromList entries
                         | Error error -> Error $"Consistency check failed when reading {guid} for {path}: {error}"
         with exn ->
             Error $"Unexpected error reading {guid} for {path}: {exn.Message}"
@@ -131,7 +132,7 @@ type FileReaderAndWriter
                 with exn -> [ Error $"Error creating {path} when reading all: {exn.Message}" ]
         with exn -> [ Error $"Unexpected error reading all for {path}: {exn.Message}" ]
 
-    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: UserId, eventJson: Json, getSnapshot) =
+    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: EntityId<User>, eventJson: Json, getSnapshot) =
         try
             let guid = guid.ToString() // intentionally shadow as only need string representation
             let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))

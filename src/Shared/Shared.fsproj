@@ -6,7 +6,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Json.fs" />
+    <Compile Include="NonEmptyList.fs" />
     <Compile Include="Rvn.fs" />
+    <Compile Include="Domain\Entity.fs" />
     <Compile Include="Domain\User.fs" />
     <Compile Include="TEMP-Shared.fs" />
     <Content Include="paket.references" />

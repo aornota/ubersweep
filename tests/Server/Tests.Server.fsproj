@@ -4,9 +4,13 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />
+    <Compile Include="Common\Counter.fs" />
+    <Compile Include="Common\FixedClock.fs" />
+    <Compile Include="Common\TestDirectory.fs" />
     <Compile Include="TEMP-ServerTests.fs" />
   </ItemGroup>
   <ItemGroup>

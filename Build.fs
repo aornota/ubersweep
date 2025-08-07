@@ -70,6 +70,8 @@ Target.create "WatchRunTests" (fun _ ->
 
 Target.create "Format" (fun _ -> run dotnet [ "fantomas"; "." ] ".")
 
+Target.create "RunServerTests" (fun _ -> run dotnet [ "run" ] serverTestsPath)
+
 open Fake.Core.TargetOperators
 
 let dependencies = [
