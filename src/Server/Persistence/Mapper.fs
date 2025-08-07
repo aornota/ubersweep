@@ -6,7 +6,7 @@ open Aornota.Ubersweep.Shared.Domain
 
 open FsToolkit.ErrorHandling
 
-#nowarn 3536
+#nowarn "3536"
 
 type Mapper<'entity, 'state, 'event when 'state :> IState and 'event :> IEvent>() =
     member _.FromEntries(guid, entries: NonEmptyList<Entry>) = result {
@@ -28,8 +28,7 @@ type Mapper<'entity, 'state, 'event when 'state :> IState and 'event :> IEvent>(
                 let! state = fromJson<'state> json
                 return IEntity<'entity, 'state, 'event>.Make(guid, rvn, state), entries.Tail
               }
-            | EventJson _ ->
-                Ok(IEntity<'entity, 'state, 'event>.Initialize (Some guid), entries.List)
+            | EventJson _ -> Ok(IEntity<'entity, 'state, 'event>.Initialize(Some guid), entries.List)
 
         let! events = checkEntries eventEntries []
 

@@ -25,7 +25,7 @@ type CounterEvent =
     interface IEvent with
         member this.EventJson = toJson this
 
-#nowarn 3536
+#nowarn "3536"
 
 type Counter = private {
     Id': EntityId<Counter>
@@ -48,20 +48,21 @@ type Counter = private {
 
         static member Evolve entity event =
             let entity' = entity :> IEntity<Counter, CounterState, CounterEvent>
+
             let state =
                 match event with
                 | Incremented -> {
                     entity'.State with
-                        Count =  entity'.State.Count + 1
+                        Count = entity'.State.Count + 1
                   }
                 | Decremented -> {
                     entity'.State with
-                        Count =  entity'.State.Count - 1
+                        Count = entity'.State.Count - 1
                   }
 
             {
                 entity with
-                    Rvn' =  entity'.Rvn.NextRvn
+                    Rvn' = entity'.Rvn.NextRvn
                     State' = state
             }
 

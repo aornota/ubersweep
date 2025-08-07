@@ -23,7 +23,7 @@ type IState =
 type IEvent =
     abstract member EventJson: Json
 
-#nowarn 3535
+#nowarn "3535"
 
 type IEntity<'entity, 'state, 'event> when 'state :> IState and 'event :> IEvent =
     static abstract member Initialize: Guid option -> 'entity
