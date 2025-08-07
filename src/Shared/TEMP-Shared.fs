@@ -1,19 +1,20 @@
-[<RequireQualifiedAccess>]
-module Aornota.Ubersweep.Shared.TEMP.Shared
+namespace Aornota.Ubersweep.Shared.TEMP
 
 open System
 
 type Todo = { Id: Guid; Description: string }
 
-let isValid (description: string) =
-    String.IsNullOrWhiteSpace description |> not
+[<RequireQualifiedAccess>]
+module Shared =
+    let isValid (description: string) =
+        String.IsNullOrWhiteSpace description |> not
 
-let create (description: string) = {
-    Id = Guid.NewGuid()
-    Description = description
-}
+    let create (description: string) = {
+        Id = Guid.NewGuid()
+        Description = description
+    }
 
-type ITodosApi = {
-    getTodos: unit -> Async<Todo list>
-    addTodo: Todo -> Async<Todo list>
-}
+    type ITodosApi = {
+        getTodos: unit -> Async<Todo list>
+        addTodo: Todo -> Async<Todo list>
+    }

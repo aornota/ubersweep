@@ -14,7 +14,6 @@
         "**/.npmrc": true,
         "**/.paket": true,
         "**/.vscode/extensions.json": true,
-        "**/Application.sln": true,
         "**/bin": true,
         "**/deploy": true,
         "**/LICENSE": true,
@@ -26,6 +25,7 @@
         "**/paket-files": true,
         "**/persisted": true,
         "**/secret": true,
+        "**/ubersweep.sln": true,
     },
     "[fsharp]": {
         "editor.formatOnSave": true,

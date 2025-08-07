@@ -1,24 +1,21 @@
-module Aornota.Ubersweep.Server.Persistence.FilePersistenceFactory
-
-open Aornota.Ubersweep.Server.Persistence.FileReaderAndWriter
-open Aornota.Ubersweep.Server.Persistence.Types
+namespace Aornota.Ubersweep.Server.Persistence
 
 open Microsoft.Extensions.Configuration
 open System.Collections.Concurrent
 
 // TODO: Add ILogger...
-type FilePersistenceFactory(config: IConfiguration) =
+type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock) =
     let root = @"D:\UberSweep\ubersweep\src\Server\persisted" // TODO: Get from IConfiguration...
     let snapshotFrequency = Some 5u // TODO: Get from IConfiguration...
 
-    let dic = ConcurrentDictionary<PartitionKey * EntityKey, IReader * IWriter>()
+    let dic = ConcurrentDictionary<PartitionKey option * EntityKey, IReader * IWriter>()
 
     let getOrAdd (partitionKey, entityKey) =
         dic.GetOrAdd(
             (partitionKey, entityKey),
             (fun _ ->
                 let readerAndWriter =
-                    FileReaderAndWriter(root, partitionKey, entityKey, snapshotFrequency)
+                    FileReaderAndWriter(root, partitionKey, entityKey, snapshotFrequency, clock)
 
                 readerAndWriter :> IReader, readerAndWriter :> IWriter)
         )

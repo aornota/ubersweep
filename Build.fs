@@ -44,10 +44,9 @@ Target.create "Azure" (fun _ ->
 
     deployment |> Deploy.execute "SAFE-App" Deploy.NoParameters |> ignore)
 
-Target.create "Build" (fun _ ->
-    run dotnet [ "build"; "Application.sln" ] "."
+Target.create "Build" (fun _ -> run dotnet [ "build"; "ubersweep.sln" ] "."
 
-    )
+)
 
 Target.create "Run" (fun _ ->
     [
@@ -60,8 +59,7 @@ Target.create "RunTestsHeadless" (fun _ ->
     run dotnet [ "run" ] serverTestsPath
     run npm [ "install" ] clientTestsPath
     run dotnet [ "fable"; "-o"; "output" ] clientTestsPath
-    run npx [ "mocha"; "output" ] clientTestsPath
-)
+    run npx [ "mocha"; "output" ] clientTestsPath)
 
 Target.create "WatchRunTests" (fun _ ->
     [

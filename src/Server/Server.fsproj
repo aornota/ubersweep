@@ -9,12 +9,12 @@
   <ItemGroup>
     <None Include="paket.references" />
     <Compile Include="Common\JsonConverter.fs" />
-    <Compile Include="Persistence\ValidPathCharsString.fs" />
     <Compile Include="Persistence\Types.fs" />
+    <Compile Include="Persistence\PersistenceClock.fs" />
     <Compile Include="Persistence\FileReaderAndWriter.fs" />
     <Compile Include="Persistence\FilePersistenceFactory.fs" />
     <Compile Include="TEMP-Storage.fs" />
-    <Compile Include="EntryPoint.fs" />
+    <Compile Include="Main.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Shared\Shared.fsproj" />
