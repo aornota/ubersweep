@@ -201,3 +201,6 @@ type FileReaderAndWriter
     interface IWriter with
         member _.WriteAsync(guid, rvn, auditUserId, eventJson, getSnapshot) =
             agent.PostAndAsyncReply(fun reply -> Write(guid, rvn, auditUserId, eventJson, getSnapshot, reply))
+
+    interface IDisposable with
+        member _.Dispose() = agent.Dispose()

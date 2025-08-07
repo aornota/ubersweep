@@ -15,7 +15,7 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock) =
             (partitionKey, entityKey),
             (fun _ ->
                 let readerAndWriter =
-                    FileReaderAndWriter(root, partitionKey, entityKey, snapshotFrequency, clock)
+                    new FileReaderAndWriter(root, partitionKey, entityKey, snapshotFrequency, clock)
 
                 readerAndWriter :> IReader, readerAndWriter :> IWriter)
         )

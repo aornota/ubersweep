@@ -11,6 +11,8 @@ type CounterState = {
     Count: int
 } with
 
+    static member InitialState = { Count = 0 }
+
     interface IState with
         member this.SnapshotJson = toJson this
 
@@ -25,8 +27,6 @@ type CounterEvent =
     interface IEvent with
         member this.EventJson = toJson this
 
-#nowarn "3536"
-
 type Counter = private {
     Id': EntityId<Counter>
     Rvn': Rvn
@@ -34,41 +34,46 @@ type Counter = private {
 } with
 
     interface IEntity<Counter, CounterState, CounterEvent> with
-        static member Initialize guid = {
-            Id' = EntityId<Counter>.Initialize guid
-            Rvn' = Rvn.InitialRvn
-            State' = { Count = 0 }
-        }
-
-        static member Make(guid, rvn, state) = {
-            Id' = EntityId<Counter>.Initialize(Some guid)
-            Rvn' = rvn
-            State' = state
-        }
-
-        static member Evolve entity event =
-            let entity' = entity :> IEntity<Counter, CounterState, CounterEvent>
-
-            let state =
-                match event with
-                | Incremented -> {
-                    entity'.State with
-                        Count = entity'.State.Count + 1
-                  }
-                | Decremented -> {
-                    entity'.State with
-                        Count = entity'.State.Count - 1
-                  }
-
-            {
-                entity with
-                    Rvn' = entity'.Rvn.NextRvn
-                    State' = state
-            }
-
         member this.Id = this.Id'
         member this.Rvn = this.Rvn'
         member this.State = this.State'
+
+type ICounterEntity = IEntity<Counter, CounterState, CounterEvent>
+
+type CounterHelper() =
+    inherit EntityHelper<Counter, CounterState, CounterEvent>()
+
+    override _.Initialize guid = {
+        Id' = EntityId<Counter>.Initialize guid
+        Rvn' = Rvn.InitialRvn
+        State' = CounterState.InitialState
+    }
+
+    override _.Make(guid, rvn, state) = {
+        Id' = EntityId<Counter>.Initialize(Some guid)
+        Rvn' = rvn
+        State' = state
+    }
+
+    override _.Evolve entity event =
+        let entity' = entity :> ICounterEntity
+
+        let state =
+            match event with
+            | Incremented -> {
+                entity'.State with
+                    Count = entity'.State.Count + 1
+              }
+            | Decremented -> {
+                entity'.State with
+                    Count = entity'.State.Count - 1
+              }
+
+        {
+            entity with
+                Rvn' = entity'.Rvn.NextRvn
+                State' = state
+        }
 
 [<RequireQualifiedAccess>]
 module Counter =
@@ -77,9 +82,11 @@ module Counter =
         | Increment -> Ok Incremented
         | Decrement -> Ok Decremented
 
+    let helper = CounterHelper()
+
     let apply command (entity: Counter) = result {
-        let! event = decide command (entity :> IEntity<Counter, CounterState, CounterEvent>).State
-        return IEntity<Counter, CounterState, CounterEvent>.Evolve entity event
+        let! event = decide command (entity :> ICounterEntity).State
+        return helper.Evolve entity event, event
     }
 
-    let mapper = Mapper<Counter, CounterState, CounterEvent>()
+    let mapper = Mapper<Counter, CounterState, CounterEvent> helper

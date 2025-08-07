@@ -11,7 +11,8 @@
     <Compile Include="Common\Counter.fs" />
     <Compile Include="Common\FixedClock.fs" />
     <Compile Include="Common\TestDirectory.fs" />
-    <Compile Include="TEMP-ServerTests.fs" />
+    <Compile Include="FileReaderAndWriterTests.fs" />
+    <Compile Include="Main.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Server\Server.fsproj" />

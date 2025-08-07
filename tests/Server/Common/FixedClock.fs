@@ -9,3 +9,6 @@ type FixedClock() =
 
     interface IPersistenceClock with
         member _.GetUtcNow() = fixedUtcNow
+
+module FixedClock =
+    let instance = FixedClock()
