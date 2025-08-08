@@ -23,13 +23,13 @@ type IState =
 type IEvent =
     abstract member EventJson: Json
 
-type IEntity<'entity, 'state, 'event> when 'state :> IState and 'event :> IEvent =
+type IEntity<'entity, 'state> when 'state :> IState =
     abstract member Id: EntityId<'entity>
     abstract member Rvn: Rvn
     abstract member State: 'state
 
 [<AbstractClass>]
-type EntityHelper<'entity, 'state, 'event>() =
-    abstract member Initialize: Guid option -> 'entity
+type EntityHelper<'entity, 'state, 'initEvent, 'event when 'initEvent :> IEvent and 'event :> IEvent>() =
+    abstract member InitializeFromEvent: Guid * 'initEvent -> 'entity
     abstract member Make: Guid * Rvn * 'state -> 'entity
     abstract member Evolve: 'entity -> 'event -> 'entity

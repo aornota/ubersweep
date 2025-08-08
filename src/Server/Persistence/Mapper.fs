@@ -6,19 +6,18 @@ open Aornota.Ubersweep.Shared.Domain
 
 open FsToolkit.ErrorHandling
 
-type Mapper<'entity, 'state, 'event when 'state :> IState and 'event :> IEvent>
-    (helper: EntityHelper<'entity, 'state, 'event>) =
+type Mapper<'entity, 'state, 'initEvent, 'event when 'state :> IState and 'initEvent :> IEvent and 'event :> IEvent>
+    (helper: EntityHelper<'entity, 'state, 'initEvent, 'event>) =
     member _.FromEntries(guid, entries: NonEmptyList<Entry>) = result {
-        let rec checkEntries eventEntries events =
+        let rec processEntries eventEntries events =
             match eventEntries with
             | h :: t ->
                 match h with
                 | EventJson(_, _, _, json) ->
                     match fromJson<'event> json with
-                    | Ok event -> checkEntries t (event :: events)
+                    | Ok event -> processEntries t (event :: events)
                     | Error error -> Error error
-                | SnapshotJson _ ->
-                    Error $"{nameof entries} contains a {nameof SnapshotJson} that is not the first {nameof Entry}"
+                | SnapshotJson _ -> Error $"{nameof eventEntries} contains a {nameof SnapshotJson}"
             | [] -> Ok(events |> List.rev)
 
         let! entity, eventEntries =
@@ -27,9 +26,12 @@ type Mapper<'entity, 'state, 'event when 'state :> IState and 'event :> IEvent>
                 let! state = fromJson<'state> json
                 return helper.Make(guid, rvn, state), entries.Tail
               }
-            | EventJson _ -> Ok(helper.Initialize(Some guid), entries.List)
+            | EventJson(_, _, _, json) -> result {
+                let! initEvent = fromJson<'initEvent> json
+                return helper.InitializeFromEvent(guid, initEvent), entries.Tail
+              }
 
-        let! events = checkEntries eventEntries []
+        let! events = processEntries eventEntries []
 
         return events |> List.fold helper.Evolve entity
     }

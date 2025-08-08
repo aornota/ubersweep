@@ -21,7 +21,7 @@ type EntityKey = string
 
 type IReader =
     abstract ReadAsync: Guid -> Async<Result<NonEmptyList<Entry>, string>>
-    abstract ReadAllAsync: unit -> Async<Result<NonEmptyList<Entry>, string> list>
+    abstract ReadAllAsync: unit -> Async<Result<Guid * NonEmptyList<Entry>, string> list>
 
 type IWriter =
     abstract WriteAsync: Guid * Rvn * EntityId<User> * Json * GetSnapshot -> Async<Result<unit, string>>

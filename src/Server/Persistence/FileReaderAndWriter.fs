@@ -10,7 +10,7 @@ open System.IO
 
 type private Input =
     | Read of guid: Guid * reply: AsyncReplyChannel<Result<NonEmptyList<Entry>, string>>
-    | ReadAll of reply: AsyncReplyChannel<Result<NonEmptyList<Entry>, string> list>
+    | ReadAll of reply: AsyncReplyChannel<Result<Guid * NonEmptyList<Entry>, string> list>
     | Write of
         guid: Guid *
         rvn: Rvn *
@@ -35,6 +35,8 @@ type FileReaderAndWriter
         match partitionKey with
         | Some partitionKey -> Path.Combine(root, partitionKey, entityKey)
         | None -> Path.Combine(root, entityKey)
+
+    // TODO: Make tryXyz async, i.e. call File.ReadAllLinesAsync (Task<string array>) rather than File.ReadAllLines &c.)?...
 
     let tryRead (guid: Guid) =
         let rec checkConsistency entries lastRvn lastWasSnapshot =
@@ -124,7 +126,13 @@ type FileReaderAndWriter
                 | h :: _ -> [
                     Error $"At least one .{fileExtension} file in {path} has a non-{nameof Guid} name (e.g. {h.Name})"
                   ]
-                | _ -> files |> List.choose snd |> List.map tryRead
+                | _ ->
+                    files
+                    |> List.choose snd
+                    |> List.map (fun guid ->
+                        match tryRead guid with
+                        | Ok entries -> Ok(guid, entries)
+                        | Error error -> Error error)
             else
                 try
                     Directory.CreateDirectory path |> ignore

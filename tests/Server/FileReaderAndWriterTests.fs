@@ -21,44 +21,76 @@ module FileReaderAndWriterTests =
 
     let private auditUserId: EntityId<User> = EntityId<User>.Initialize None
 
-    let private write (writer: IWriter, counter: Counter, event: CounterEvent) =
+    let private write (writer: IWriter, entity: ICounterEntity, event: IEvent) =
         writer.WriteAsync(
-            (counter :> ICounterEntity).Id.Guid,
-            (counter :> ICounterEntity).Rvn,
+            entity.Id.Guid,
+            entity.Rvn,
             auditUserId,
-            (event :> IEvent).EventJson,
-            fun _ -> ((counter :> ICounterEntity).State :> IState).SnapshotJson
+            event.EventJson,
+            fun _ -> (entity.State :> IState).SnapshotJson
         )
         |> Async.RunSynchronously
 
-    let private read (reader: IReader, counter: Counter) =
-        reader.ReadAsync (counter :> ICounterEntity).Id.Guid |> Async.RunSynchronously
+    let private read (reader: IReader, guid) =
+        reader.ReadAsync guid |> Async.RunSynchronously
+
+    let private readAll (reader: IReader) =
+        reader.ReadAllAsync() |> Async.RunSynchronously
 
     let private happyTests =
         testList "Happy tests" [
-            testCase "TEMP...Happy test"
+            testCase "WIP test"
             <| fun _ ->
                 use testDir = new TestDirectory(None, nameof Counter)
-                use agent = getAgents (testDir, None)
+                use agent = getAgents (testDir, Some 4u)
 
                 let reader, writer = agent :> IReader, agent :> IWriter
-                let guid = Guid.NewGuid()
-                let counter = Counter.helper.Initialize(Some guid)
-
-                // TODO: Test is failing wotj "File does not exist when writing non-initial (Rvn 2u)" because initialized counter is Rvn 1 - so need to rethink this...
 
                 let result = result {
+                    let counter, event = Counter.helper.InitializeFromCommand(Initialize -1)
+                    let! _ = write (writer, counter, event)
                     let! counter, event = counter |> Counter.apply Increment
+                    let! _ = write (writer, counter, event)
+                    let! counter, event = counter |> Counter.apply Increment
+                    let! _ = write (writer, counter, event)
+                    let! counter, event = counter |> Counter.apply Decrement
+                    let! _ = write (writer, counter, event)
+                    let! counter, event = counter |> Counter.apply Increment
+                    let! _ = write (writer, counter, event)
+                    let! counter, event = counter |> Counter.apply Increment
+                    let! _ = write (writer, counter, event)
+                    let! counter, event = counter |> Counter.apply Decrement
                     let! _ = write (writer, counter, event)
                     let! counter, event = counter |> Counter.apply Increment
                     let! _ = write (writer, counter, event)
 
-                    let! entries = read (reader, counter)
+                    let guid = (counter :> ICounterEntity).Id.Guid
+                    let! entriesForGuid = read (reader, guid)
+                    let! actualForGuid = Counter.mapper.FromEntries(guid, entriesForGuid)
 
-                    return! Counter.mapper.FromEntries((counter :> ICounterEntity).Id.Guid, entries)
+                    let! guidAndEntriesForOnly =
+                        match readAll reader with
+                        | [ result ] -> result
+                        | [] -> Error "Reading all returned empty"
+                        | _ -> Error "Reading all returned multiple"
+
+                    let! actualForOnly = Counter.mapper.FromEntries guidAndEntriesForOnly
+
+                    return actualForGuid, actualForOnly, counter
                 }
 
-                Expect.isOk result $"{nameof result} should be Ok"
+                match result with
+                | Ok(actualForGuid, actualForOnly, expected) ->
+                    let expectedCount = 2
+
+                    Expect.equal
+                        (expected :> ICounterEntity).State.Count
+                        expectedCount
+                        $"Count for {nameof expected} should equal {expectedCount}"
+
+                    Expect.equal actualForGuid expected $"{nameof actualForGuid} shoudl equal {nameof expected}"
+                    Expect.equal actualForOnly expected $"{nameof actualForOnly} shoudl equal {nameof expected}"
+                | Error _ -> Expect.isOk result $"{nameof result} should be Ok"
         ]
 
     (* TODO: Sad tests...

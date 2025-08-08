@@ -11,14 +11,20 @@ type CounterState = {
     Count: int
 } with
 
-    static member InitialState = { Count = 0 }
-
     interface IState with
         member this.SnapshotJson = toJson this
+
+type CounterInitCommand = Initialize of count: int
 
 type CounterCommand =
     | Increment
     | Decrement
+
+type CounterInitEvent =
+    | Initialized of count: int
+
+    interface IEvent with
+        member this.EventJson = toJson this
 
 type CounterEvent =
     | Incremented
@@ -33,21 +39,24 @@ type Counter = private {
     State': CounterState
 } with
 
-    interface IEntity<Counter, CounterState, CounterEvent> with
+    interface IEntity<Counter, CounterState> with
         member this.Id = this.Id'
         member this.Rvn = this.Rvn'
         member this.State = this.State'
 
-type ICounterEntity = IEntity<Counter, CounterState, CounterEvent>
+type ICounterEntity = IEntity<Counter, CounterState>
 
 type CounterHelper() =
-    inherit EntityHelper<Counter, CounterState, CounterEvent>()
+    inherit EntityHelper<Counter, CounterState, CounterInitEvent, CounterEvent>()
 
-    override _.Initialize guid = {
+    let initialize guid state = {
         Id' = EntityId<Counter>.Initialize guid
         Rvn' = Rvn.InitialRvn
-        State' = CounterState.InitialState
+        State' = state
     }
+
+    override _.InitializeFromEvent(guid, Initialized count) =
+        initialize (Some guid) { Count = count }
 
     override _.Make(guid, rvn, state) = {
         Id' = EntityId<Counter>.Initialize(Some guid)
@@ -75,9 +84,12 @@ type CounterHelper() =
                 State' = state
         }
 
+    member _.InitializeFromCommand(Initialize count) =
+        initialize None { Count = count }, Initialized count
+
 [<RequireQualifiedAccess>]
 module Counter =
-    let private decide command (_: CounterState) =
+    let private decide command (_: ICounterEntity) =
         match command with
         | Increment -> Ok Incremented
         | Decrement -> Ok Decremented
@@ -85,8 +97,8 @@ module Counter =
     let helper = CounterHelper()
 
     let apply command (entity: Counter) = result {
-        let! event = decide command (entity :> ICounterEntity).State
+        let! event = decide command entity
         return helper.Evolve entity event, event
     }
 
-    let mapper = Mapper<Counter, CounterState, CounterEvent> helper
+    let mapper = Mapper<Counter, CounterState, CounterInitEvent, CounterEvent> helper
