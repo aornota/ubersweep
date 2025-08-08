@@ -1,18 +1,15 @@
 namespace Aornota.Ubersweep.Tests.Server.Common
 
 open Aornota.Ubersweep.Server.Persistence
-open Aornota.Ubersweep.Server.Common.JsonConverter
 open Aornota.Ubersweep.Shared
 open Aornota.Ubersweep.Shared.Domain
 
 open FsToolkit.ErrorHandling
 
-type CounterState = {
-    Count: int
-} with
-
-    interface IState with
-        member this.SnapshotJson = toJson this
+(* For domain entities:
+     -- CounterInitCommand | CounterCommand would be defined in Shared project?
+     -- CounterState | Counter might be defined in Shared project?
+     -- CounterInitEvent | CounterEvent | CounterHelper would be defined in Server project? *)
 
 type CounterInitCommand = Initialize of count: int
 
@@ -20,18 +17,12 @@ type CounterCommand =
     | Increment
     | Decrement
 
-type CounterInitEvent =
-    | Initialized of count: int
+type CounterState = {
+    Count: int
+} with
 
-    interface IEvent with
-        member this.EventJson = toJson this
-
-type CounterEvent =
-    | Incremented
-    | Decremented
-
-    interface IEvent with
-        member this.EventJson = toJson this
+    interface IState<CounterState> with
+        member this.SnapshotJson toJson = toJson this
 
 type Counter = private {
     Id': EntityId<Counter>
@@ -39,15 +30,25 @@ type Counter = private {
     State': CounterState
 } with
 
-    interface IEntity<Counter, CounterState> with
-        member this.Id = this.Id'
-        member this.Rvn = this.Rvn'
-        member this.State = this.State'
+    member this.Id = this.Id'
+    member this.Rvn = this.Rvn'
+    member this.State = this.State'
 
-type ICounterEntity = IEntity<Counter, CounterState>
+type CounterInitEvent =
+    | Initialized of count: int
+
+    interface IEvent<CounterInitEvent> with
+        member this.EventJson toJson = toJson this
+
+type CounterEvent =
+    | Incremented
+    | Decremented
+
+    interface IEvent<CounterEvent> with
+        member this.EventJson toJson = toJson this
 
 type CounterHelper() =
-    inherit EntityHelper<Counter, CounterState, CounterInitEvent, CounterEvent>()
+    inherit MapperHelper<Counter, CounterState, CounterInitEvent, CounterEvent>()
 
     let initialize guid state = {
         Id' = EntityId<Counter>.Initialize guid
@@ -65,22 +66,20 @@ type CounterHelper() =
     }
 
     override _.Evolve entity event =
-        let entity' = entity :> ICounterEntity
-
         let state =
             match event with
             | Incremented -> {
-                entity'.State with
-                    Count = entity'.State.Count + 1
+                entity.State with
+                    Count = entity.State.Count + 1
               }
             | Decremented -> {
-                entity'.State with
-                    Count = entity'.State.Count - 1
+                entity.State with
+                    Count = entity.State.Count - 1
               }
 
         {
             entity with
-                Rvn' = entity'.Rvn.NextRvn
+                Rvn' = entity.Rvn.NextRvn
                 State' = state
         }
 
@@ -89,14 +88,14 @@ type CounterHelper() =
 
 [<RequireQualifiedAccess>]
 module Counter =
-    let private decide command (_: ICounterEntity) =
+    let private decide command (_: Counter) =
         match command with
         | Increment -> Ok Incremented
         | Decrement -> Ok Decremented
 
     let helper = CounterHelper()
 
-    let apply command (entity: Counter) = result {
+    let apply command entity = result {
         let! event = decide command entity
         return helper.Evolve entity event, event
     }

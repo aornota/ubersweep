@@ -1,12 +1,12 @@
 namespace Aornota.Ubersweep.Tests.Server
 
+open Aornota.Ubersweep.Server.Common.JsonConverter
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Domain
 open Aornota.Ubersweep.Tests.Server.Common
 
 open Expecto
 open FsToolkit.ErrorHandling
-open System
 
 [<RequireQualifiedAccess>]
 module FileReaderAndWriterTests =
@@ -21,13 +21,13 @@ module FileReaderAndWriterTests =
 
     let private auditUserId: EntityId<User> = EntityId<User>.Initialize None
 
-    let private write (writer: IWriter, entity: ICounterEntity, event: IEvent) =
+    let private write<'event when 'event :> IEvent<'event>> (writer: IWriter, counter: Counter, event: 'event) =
         writer.WriteAsync(
-            entity.Id.Guid,
-            entity.Rvn,
+            counter.Id.Guid,
+            counter.Rvn,
             auditUserId,
-            event.EventJson,
-            fun _ -> (entity.State :> IState).SnapshotJson
+            event.EventJson toJson,
+            fun _ -> (counter.State :> IState<CounterState>).SnapshotJson toJson
         )
         |> Async.RunSynchronously
 
@@ -64,7 +64,7 @@ module FileReaderAndWriterTests =
                     let! counter, event = counter |> Counter.apply Increment
                     let! _ = write (writer, counter, event)
 
-                    let guid = (counter :> ICounterEntity).Id.Guid
+                    let guid = counter.Id.Guid
                     let! entriesForGuid = read (reader, guid)
                     let! actualForGuid = Counter.mapper.FromEntries(guid, entriesForGuid)
 
@@ -84,7 +84,7 @@ module FileReaderAndWriterTests =
                     let expectedCount = 2
 
                     Expect.equal
-                        (expected :> ICounterEntity).State.Count
+                        expected.State.Count
                         expectedCount
                         $"Count for {nameof expected} should equal {expectedCount}"
 

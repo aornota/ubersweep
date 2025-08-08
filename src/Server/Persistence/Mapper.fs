@@ -5,9 +5,18 @@ open Aornota.Ubersweep.Shared
 open Aornota.Ubersweep.Shared.Domain
 
 open FsToolkit.ErrorHandling
+open System
 
-type Mapper<'entity, 'state, 'initEvent, 'event when 'state :> IState and 'initEvent :> IEvent and 'event :> IEvent>
-    (helper: EntityHelper<'entity, 'state, 'initEvent, 'event>) =
+[<AbstractClass>]
+type MapperHelper<'entity, 'state, 'initEvent, 'event when 'initEvent :> IEvent<'initEvent> and 'event :> IEvent<'event>>
+    () =
+    abstract member InitializeFromEvent: Guid * 'initEvent -> 'entity
+    abstract member Make: Guid * Rvn * 'state -> 'entity
+    abstract member Evolve: 'entity -> 'event -> 'entity
+
+type Mapper<'entity, 'state, 'initEvent, 'event
+    when 'state :> IState<'state> and 'initEvent :> IEvent<'initEvent> and 'event :> IEvent<'event>>
+    (helper: MapperHelper<'entity, 'state, 'initEvent, 'event>) =
     member _.FromEntries(guid, entries: NonEmptyList<Entry>) = result {
         let rec processEntries eventEntries events =
             match eventEntries with

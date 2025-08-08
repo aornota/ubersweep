@@ -17,19 +17,10 @@ type EntityId<'entity> =
         let (Id' guid) = this
         guid
 
-type IState =
-    abstract member SnapshotJson: Json
+type ToJson<'a> = 'a -> Json
 
-type IEvent =
-    abstract member EventJson: Json
+type IState<'a> =
+    abstract member SnapshotJson: ToJson<'a> -> Json
 
-type IEntity<'entity, 'state> when 'state :> IState =
-    abstract member Id: EntityId<'entity>
-    abstract member Rvn: Rvn
-    abstract member State: 'state
-
-[<AbstractClass>]
-type EntityHelper<'entity, 'state, 'initEvent, 'event when 'initEvent :> IEvent and 'event :> IEvent>() =
-    abstract member InitializeFromEvent: Guid * 'initEvent -> 'entity
-    abstract member Make: Guid * Rvn * 'state -> 'entity
-    abstract member Evolve: 'entity -> 'event -> 'entity
+type IEvent<'a> =
+    abstract member EventJson: ToJson<'a> -> Json

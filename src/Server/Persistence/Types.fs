@@ -29,6 +29,10 @@ type IWriter =
 type IPersistenceClock =
     abstract GetUtcNow: unit -> DateTime
 
+type PersistenceClock() =
+    interface IPersistenceClock with
+        member _.GetUtcNow() = DateTime.UtcNow
+
 type IPersistenceFactory =
     abstract GetReader: PartitionKey option * EntityKey -> IReader
     abstract GetWriter: PartitionKey option * EntityKey -> IWriter
