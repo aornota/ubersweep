@@ -22,7 +22,7 @@ type Counter = {
     Count: int
 } with
 
-    interface IState with
+    interface IEntity with
         member this.SnapshotJson = Json.toJson this
 
 type CounterInitEvent =
@@ -40,8 +40,8 @@ type CounterEvent =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type CounterHelper() =
-    inherit EntityHelper<Counter, CounterInitEvent, CounterEvent>()
+type CounterEventHelper() =
+    inherit EntityEventHelper<Counter, CounterInitEvent, CounterEvent>()
 
     override _.InitializeFromEvent(guid, Initialized count) =
         Entity<Counter>(EntityId<Counter>.Initialize(Some guid), Rvn.InitialRvn, { Count = count })
@@ -66,12 +66,8 @@ type CounterHelper() =
                     Count = entity.State.Count / divisor
               }
 
-        (entity :> IEntity<Counter>).Evolve state
-
+        entity.Evolve state
         entity
-
-    member _.InitializeFromCommand(Initialize count) =
-        Entity<Counter>(EntityId<Counter>.Initialize None, Rvn.InitialRvn, { Count = count }), Initialized count
 
 [<RequireQualifiedAccess>]
 module Counter =
@@ -86,11 +82,12 @@ module Counter =
             else
                 Error "Cannot divide by zero"
 
-    let helper = CounterHelper()
+    let eventHelper = CounterEventHelper()
+
+    let initializeFromCommand (Initialize count) =
+        Entity<Counter>(EntityId<Counter>.Initialize None, Rvn.InitialRvn, { Count = count }), Initialized count
 
     let apply command entity = result {
         let! event = decide command entity
-        return helper.Evolve entity event, event
+        return eventHelper.Evolve entity event, event
     }
-
-    let mapper = EntityMapper<Counter, CounterInitEvent, CounterEvent> helper

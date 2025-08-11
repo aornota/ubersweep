@@ -11,7 +11,7 @@
     <Compile Include="Persistence\Types.fs" />
     <Compile Include="Persistence\FileReaderAndWriter.fs" />
     <Compile Include="Persistence\FilePersistenceFactory.fs" />
-    <Compile Include="Persistence\EntityMapper.fs" />
+    <Compile Include="Persistence\EntityEventHelper.fs" />
     <Compile Include="TEMP-Storage.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>

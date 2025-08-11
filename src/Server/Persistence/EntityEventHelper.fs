@@ -7,15 +7,12 @@ open FsToolkit.ErrorHandling
 open System
 
 [<AbstractClass>]
-type EntityHelper<'entity, 'initEvent, 'event
-    when 'entity :> IState and 'entity: equality and 'initEvent :> IEvent and 'event :> IEvent>() =
+type EntityEventHelper<'entity, 'initEvent, 'event
+    when 'entity :> IEntity and 'entity: equality and 'initEvent :> IEvent and 'event :> IEvent>() =
     abstract member InitializeFromEvent: Guid * 'initEvent -> Entity<'entity>
     abstract member Evolve: Entity<'entity> -> 'event -> Entity<'entity>
 
-type EntityMapper<'entity, 'initEvent, 'event
-    when 'entity :> IState and 'entity: equality and 'initEvent :> IEvent and 'event :> IEvent>
-    (helper: EntityHelper<'entity, 'initEvent, 'event>) =
-    member _.FromEntries(guid, entries: NonEmptyList<Entry>) = result {
+    member this.FromEntries(guid, entries: NonEmptyList<Entry>) = result {
         let rec processEntries eventEntries events =
             match eventEntries with
             | h :: t ->
@@ -35,10 +32,10 @@ type EntityMapper<'entity, 'initEvent, 'event
               }
             | EventJson(_, _, _, json) -> result {
                 let! initEvent = Json.fromJson<'initEvent> json
-                return helper.InitializeFromEvent(guid, initEvent), entries.Tail
+                return this.InitializeFromEvent(guid, initEvent), entries.Tail
               }
 
         let! events = processEntries eventEntries []
 
-        return events |> List.fold helper.Evolve entity
+        return events |> List.fold this.Evolve entity
     }
