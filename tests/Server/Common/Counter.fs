@@ -7,9 +7,8 @@ open Aornota.Ubersweep.Shared.Domain
 open FsToolkit.ErrorHandling
 
 (* For domain entities:
-     -- CounterInitCommand | CounterCommand would be defined in Shared project?
-     -- CounterState | Counter might be defined in Shared project?
-     -- CounterInitEvent | CounterEvent | CounterHelper would be defined in Server project? *)
+     -- CounterInitCommand | CounterCommand | Counter would be defined in Shared project?
+     -- CounterInitEvent | CounterEvent | CounterMapper would be defined in Server project? *)
 
 type CounterInitCommand = Initialize of count: int
 
@@ -19,7 +18,7 @@ type CounterCommand =
     | MultiplyBy of multiplier: int
     | DivideBy of divisor: int
 
-type CounterState = {
+type Counter = {
     Count: int
 } with
 
@@ -41,28 +40,11 @@ type CounterEvent =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type Counter private (id: EntityId<CounterState>, rvn: Rvn, state: CounterState) =
-    inherit Entity<CounterState>(id, rvn, state)
-
-    static let initialize guid state =
-        Counter(EntityId<CounterState>.Initialize guid, Rvn.InitialRvn, state)
-
-    static member InitializeFromCommand(Initialize count) =
-        initialize None { Count = count }, Initialized count
-
-    static member InitializeFromEvent(guid, Initialized count) =
-        initialize (Some guid) { Count = count }
-
-    static member Make(guid, rvn, state) =
-        Counter(EntityId<CounterState>.Initialize(Some guid), rvn, state)
-
 type CounterHelper() =
-    inherit MapperHelper<Counter, CounterState, CounterInitEvent, CounterEvent>()
+    inherit EntityHelper<Counter, CounterInitEvent, CounterEvent>()
 
     override _.InitializeFromEvent(guid, Initialized count) =
-        Counter.InitializeFromEvent(guid, Initialized count)
-
-    override _.Make(guid, rvn, state) = Counter.Make(guid, rvn, state)
+        Entity<Counter>(EntityId<Counter>.Initialize(Some guid), Rvn.InitialRvn, { Count = count })
 
     override _.Evolve entity event =
         let state =
@@ -84,13 +66,16 @@ type CounterHelper() =
                     Count = entity.State.Count / divisor
               }
 
-        (entity :> IEntity<CounterState>).Evolve state
+        (entity :> IEntity<Counter>).Evolve state
 
         entity
 
+    member _.InitializeFromCommand(Initialize count) =
+        Entity<Counter>(EntityId<Counter>.Initialize None, Rvn.InitialRvn, { Count = count }), Initialized count
+
 [<RequireQualifiedAccess>]
 module Counter =
-    let private decide command (_: Counter) =
+    let private decide command (_: Entity<Counter>) =
         match command with
         | Increment -> Ok Incremented
         | Decrement -> Ok Decremented
@@ -101,11 +86,11 @@ module Counter =
             else
                 Error "Cannot divide by zero"
 
-    let private helper = CounterHelper()
+    let helper = CounterHelper()
 
     let apply command entity = result {
         let! event = decide command entity
         return helper.Evolve entity event, event
     }
 
-    let mapper = Mapper<Counter, CounterState, CounterInitEvent, CounterEvent> helper
+    let mapper = EntityMapper<Counter, CounterInitEvent, CounterEvent> helper

@@ -20,36 +20,34 @@ type EntityId<'entity> =
 type IState =
     abstract SnapshotJson: Json
 
-type IEntity<'state when 'state :> IState> =
-    abstract Id: EntityId<'state>
+type IEntity<'entity when 'entity :> IState> =
+    abstract Id: EntityId<'entity>
     abstract Rvn: Rvn
     abstract SnapshotJson: Json
-    abstract Evolve: 'state -> unit
+    abstract Evolve: 'entity -> unit
 
-type private EntityInner<'state when 'state :> IState> = {
-    Id: EntityId<'state>
+type private EntityInner<'entity when 'entity :> IState> = {
+    Id: EntityId<'entity>
     Rvn: Rvn
-    State: 'state
+    State: 'entity
 }
 
-[<AbstractClass>]
-type Entity<'state when 'state :> IState and 'state: equality>(id: EntityId<'state>, rvn: Rvn, state: 'state) =
+type Entity<'entity when 'entity :> IState and 'entity: equality>(id: EntityId<'entity>, rvn: Rvn, state: 'entity) =
     let mutable entity = { Id = id; Rvn = rvn; State = state }
     member _.State = entity.State
 
-    member _.Equals(other: Entity<'state>) =
-        entity.Id = (other :> IEntity<'state>).Id
-        && entity.Rvn = (other :> IEntity<'state>).Rvn
-        && entity.State = other.State
+    member _.Equals(other: Entity<'entity>) =
+        let other' = other :> IEntity<'entity>
+        entity.Id = other'.Id && entity.Rvn = other'.Rvn && entity.State = other.State
 
     override this.Equals other =
         match other with
-        | :? Entity<'state> as other -> this.Equals other
+        | :? Entity<'entity> as other -> this.Equals other
         | _ -> false
 
     override _.GetHashCode() = entity.GetHashCode()
 
-    interface IEntity<'state> with
+    interface IEntity<'entity> with
         member _.Id = entity.Id
         member _.Rvn = entity.Rvn
         member _.SnapshotJson = Json.toJson entity.State
@@ -61,7 +59,7 @@ type Entity<'state when 'state :> IState and 'state: equality>(id: EntityId<'sta
                     State = state
             }
 
-    interface IEquatable<Entity<'state>> with
+    interface IEquatable<Entity<'entity>> with
         member this.Equals other = this.Equals other
 
 type IEvent =

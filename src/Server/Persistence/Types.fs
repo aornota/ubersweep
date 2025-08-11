@@ -6,7 +6,7 @@ open Aornota.Ubersweep.Shared.Domain
 open System
 
 type Entry =
-    | EventJson of rvn: Rvn * timestampUtc: DateTime * auditUserId: EntityId<UserState> * json: Json
+    | EventJson of rvn: Rvn * timestampUtc: DateTime * auditUserId: EntityId<User> * json: Json
     | SnapshotJson of rvn: Rvn * json: Json
 
     member this.Rvn =
@@ -24,7 +24,7 @@ type IReader =
     abstract ReadAllAsync: unit -> Async<Result<Guid * NonEmptyList<Entry>, string> list>
 
 type IWriter =
-    abstract WriteAsync: Guid * Rvn * EntityId<UserState> * Json * GetSnapshot -> Async<Result<unit, string>>
+    abstract WriteAsync: Guid * Rvn * EntityId<User> * Json * GetSnapshot -> Async<Result<unit, string>>
 
 type IPersistenceClock =
     abstract GetUtcNow: unit -> DateTime

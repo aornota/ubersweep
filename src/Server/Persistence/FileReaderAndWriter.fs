@@ -14,7 +14,7 @@ type private Input =
     | Write of
         guid: Guid *
         rvn: Rvn *
-        auditUserId: EntityId<UserState> *
+        auditUserId: EntityId<User> *
         eventJson: Json *
         getSnapsot: GetSnapshot *
         reply: AsyncReplyChannel<Result<unit, string>>
@@ -146,7 +146,7 @@ type FileReaderAndWriter
             return [| Error $"Unexpected error reading all for {path}: {exn.Message}" |]
     }
 
-    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: EntityId<UserState>, eventJson: Json, getSnapshot) = asyncResult {
+    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: EntityId<User>, eventJson: Json, getSnapshot) = asyncResult {
         try
             let guid = guid.ToString() // intentionally shadow as only need string representation
             let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))

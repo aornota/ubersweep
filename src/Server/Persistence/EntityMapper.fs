@@ -7,22 +7,14 @@ open FsToolkit.ErrorHandling
 open System
 
 [<AbstractClass>]
-type MapperHelper<'entity, 'state, 'initEvent, 'event
-    when 'entity :> Entity<'state>
-    and 'state :> IState
-    and 'state: equality
-    and 'initEvent :> IEvent
-    and 'event :> IEvent>() =
-    abstract member InitializeFromEvent: Guid * 'initEvent -> 'entity
-    abstract member Make: Guid * Rvn * 'state -> 'entity
-    abstract member Evolve: 'entity -> 'event -> 'entity
+type EntityHelper<'entity, 'initEvent, 'event
+    when 'entity :> IState and 'entity: equality and 'initEvent :> IEvent and 'event :> IEvent>() =
+    abstract member InitializeFromEvent: Guid * 'initEvent -> Entity<'entity>
+    abstract member Evolve: Entity<'entity> -> 'event -> Entity<'entity>
 
-type Mapper<'entity, 'state, 'initEvent, 'event
-    when 'entity :> Entity<'state>
-    and 'state :> IState
-    and 'state: equality
-    and 'initEvent :> IEvent
-    and 'event :> IEvent>(helper: MapperHelper<'entity, 'state, 'initEvent, 'event>) =
+type EntityMapper<'entity, 'initEvent, 'event
+    when 'entity :> IState and 'entity: equality and 'initEvent :> IEvent and 'event :> IEvent>
+    (helper: EntityHelper<'entity, 'initEvent, 'event>) =
     member _.FromEntries(guid, entries: NonEmptyList<Entry>) = result {
         let rec processEntries eventEntries events =
             match eventEntries with
@@ -38,8 +30,8 @@ type Mapper<'entity, 'state, 'initEvent, 'event
         let! entity, eventEntries =
             match entries.Head with
             | SnapshotJson(rvn, json) -> result {
-                let! state = Json.fromJson<'state> json
-                return helper.Make(guid, rvn, state), entries.Tail
+                let! state = Json.fromJson<'entity> json
+                return Entity<'entity>(EntityId<'entity>.Initialize(Some guid), rvn, state), entries.Tail
               }
             | EventJson(_, _, _, json) -> result {
                 let! initEvent = Json.fromJson<'initEvent> json

@@ -9,16 +9,16 @@ open FsToolkit.ErrorHandling
 
 [<RequireQualifiedAccess>]
 module FileReaderAndWriterTests =
-    let private auditUser1Id = EntityId<UserState>.Initialize None
-    let private auditUser2Id = EntityId<UserState>.Initialize None
+    let private auditUser1Id = EntityId<User>.Initialize None
+    let private auditUser2Id = EntityId<User>.Initialize None
 
     let private happyTests =
         testList "Happy tests" [
             testAsync "WIP test" {
-                use testDir = new TestPersistenceDirectory<Counter, CounterState>(None, Some 4u)
+                use testDir = new TestPersistenceDirectory<Counter>(None, Some 4u)
 
                 let! result = asyncResult {
-                    let expected, event = Counter.InitializeFromCommand(Initialize -1)
+                    let expected, event = Counter.helper.InitializeFromCommand(Initialize -1)
                     let! _ = testDir.WriteAsync(expected, event, auditUser1Id)
                     let! expected, event = expected |> Counter.apply Increment
                     let! _ = testDir.WriteAsync(expected, event, auditUser1Id)
@@ -35,7 +35,7 @@ module FileReaderAndWriterTests =
                     let! expected, event = expected |> Counter.apply Decrement
                     let! _ = testDir.WriteAsync(expected, event, auditUser1Id)
 
-                    let guid = (expected :> IEntity<CounterState>).Id.Guid
+                    let guid = (expected :> IEntity<Counter>).Id.Guid
                     let! entriesForGuid = testDir.ReadAsync guid
                     let! actualForGuid = Counter.mapper.FromEntries(guid, entriesForGuid)
 

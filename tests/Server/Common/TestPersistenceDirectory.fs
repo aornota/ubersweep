@@ -6,7 +6,7 @@ open Aornota.Ubersweep.Shared.Domain
 open System
 open System.IO
 
-type TestPersistenceDirectory<'entity, 'state when 'entity :> Entity<'state> and 'state :> IState and 'state: equality>
+type TestPersistenceDirectory<'entity when 'entity :> IState and 'entity: equality>
     (partitionKey: PartitionKey option, snapshotFrequency: uint option, ?retainOnDispose) =
     let retainOnDispose = defaultArg retainOnDispose false
 
@@ -35,9 +35,10 @@ type TestPersistenceDirectory<'entity, 'state when 'entity :> Entity<'state> and
     member _.ReadAllAsync() = reader.ReadAllAsync()
 
     member _.WriteAsync<'event when 'event :> IEvent>
-        (entity: IEntity<'state>, event: 'event, auditUserId: EntityId<UserState>)
+        (entity: Entity<'entity>, event: 'event, auditUserId: EntityId<User>)
         =
-        writer.WriteAsync(entity.Id.Guid, entity.Rvn, auditUserId, event.EventJson, (fun _ -> entity.SnapshotJson))
+        let entity' = entity :> IEntity<'entity>
+        writer.WriteAsync(entity'.Id.Guid, entity'.Rvn, auditUserId, event.EventJson, (fun _ -> entity'.SnapshotJson))
 
     // TODO: Add methods to read/write "raw" files?...
 

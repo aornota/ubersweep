@@ -1,3 +1,12 @@
 namespace Aornota.Ubersweep.Shared.Domain
 
-type UserState = unit // TEMP: Needed to allow EntityId<UserState>
+type UserType =
+    | SuperUser
+    | Administrator
+    | Pleb
+    | PersonaNonGrata
+
+type User = {
+    // TODO: More fields...
+    UserType: UserType
+}
