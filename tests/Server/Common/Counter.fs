@@ -16,54 +16,53 @@ type CounterInitCommand = Initialize of count: int
 type CounterCommand =
     | Increment
     | Decrement
+    | MultiplyBy of multiplier: int
+    | DivideBy of divisor: int
 
 type CounterState = {
     Count: int
 } with
 
-    interface IState<CounterState> with
-        member this.SnapshotJson toJson = toJson this
-
-type Counter = private {
-    Id': EntityId<Counter>
-    Rvn': Rvn
-    State': CounterState
-} with
-
-    member this.Id = this.Id'
-    member this.Rvn = this.Rvn'
-    member this.State = this.State'
+    interface IState with
+        member this.SnapshotJson = Json.toJson this
 
 type CounterInitEvent =
     | Initialized of count: int
 
-    interface IEvent<CounterInitEvent> with
-        member this.EventJson toJson = toJson this
+    interface IEvent with
+        member this.EventJson = Json.toJson this
 
 type CounterEvent =
     | Incremented
     | Decremented
+    | MultipliedBy of multiplier: int
+    | DividedBy of divisor: int
 
-    interface IEvent<CounterEvent> with
-        member this.EventJson toJson = toJson this
+    interface IEvent with
+        member this.EventJson = Json.toJson this
+
+type Counter private (id: EntityId<CounterState>, rvn: Rvn, state: CounterState) =
+    inherit Entity<CounterState>(id, rvn, state)
+
+    static let initialize guid state =
+        Counter(EntityId<CounterState>.Initialize guid, Rvn.InitialRvn, state)
+
+    static member InitializeFromCommand(Initialize count) =
+        initialize None { Count = count }, Initialized count
+
+    static member InitializeFromEvent(guid, Initialized count) =
+        initialize (Some guid) { Count = count }
+
+    static member Make(guid, rvn, state) =
+        Counter(EntityId<CounterState>.Initialize(Some guid), rvn, state)
 
 type CounterHelper() =
     inherit MapperHelper<Counter, CounterState, CounterInitEvent, CounterEvent>()
 
-    let initialize guid state = {
-        Id' = EntityId<Counter>.Initialize guid
-        Rvn' = Rvn.InitialRvn
-        State' = state
-    }
-
     override _.InitializeFromEvent(guid, Initialized count) =
-        initialize (Some guid) { Count = count }
+        Counter.InitializeFromEvent(guid, Initialized count)
 
-    override _.Make(guid, rvn, state) = {
-        Id' = EntityId<Counter>.Initialize(Some guid)
-        Rvn' = rvn
-        State' = state
-    }
+    override _.Make(guid, rvn, state) = Counter.Make(guid, rvn, state)
 
     override _.Evolve entity event =
         let state =
@@ -76,15 +75,18 @@ type CounterHelper() =
                 entity.State with
                     Count = entity.State.Count - 1
               }
+            | MultipliedBy multiplier -> {
+                entity.State with
+                    Count = entity.State.Count * multiplier
+              }
+            | DividedBy divisor -> {
+                entity.State with
+                    Count = entity.State.Count / divisor
+              }
 
-        {
-            entity with
-                Rvn' = entity.Rvn.NextRvn
-                State' = state
-        }
+        (entity :> IEntity<CounterState>).Evolve state
 
-    member _.InitializeFromCommand(Initialize count) =
-        initialize None { Count = count }, Initialized count
+        entity
 
 [<RequireQualifiedAccess>]
 module Counter =
@@ -92,8 +94,14 @@ module Counter =
         match command with
         | Increment -> Ok Incremented
         | Decrement -> Ok Decremented
+        | MultiplyBy multiplier -> Ok(MultipliedBy multiplier)
+        | DivideBy divisor ->
+            if divisor <> 0 then
+                Ok(DividedBy divisor)
+            else
+                Error "Cannot divide by zero"
 
-    let helper = CounterHelper()
+    let private helper = CounterHelper()
 
     let apply command entity = result {
         let! event = decide command entity

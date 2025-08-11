@@ -1,10 +1,10 @@
 namespace Aornota.Ubersweep.Server.Persistence
 
-open Aornota.Ubersweep.Server.Common.JsonConverter
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared
 open Aornota.Ubersweep.Shared.Domain
 
+open FsToolkit.ErrorHandling
 open System
 open System.IO
 
@@ -14,7 +14,7 @@ type private Input =
     | Write of
         guid: Guid *
         rvn: Rvn *
-        auditUserId: EntityId<User> *
+        auditUserId: EntityId<UserState> *
         eventJson: Json *
         getSnapsot: GetSnapshot *
         reply: AsyncReplyChannel<Result<unit, string>>
@@ -36,9 +36,7 @@ type FileReaderAndWriter
         | Some partitionKey -> Path.Combine(root, partitionKey, entityKey)
         | None -> Path.Combine(root, entityKey)
 
-    // TODO: Make tryXyz async, i.e. call File.ReadAllLinesAsync (Task<string array>) rather than File.ReadAllLines &c.)?...
-
-    let tryRead (guid: Guid) =
+    let tryRead (guid: Guid) = asyncResult {
         let rec checkConsistency entries lastRvn lastWasSnapshot =
             match entries with
             | h :: t ->
@@ -69,17 +67,18 @@ type FileReaderAndWriter
             | [] -> acc
 
         try
-            let guid = guid.ToString() // intentionally shadow as only need string representation
             let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))
 
             if not (File.Exists file.FullName) then
-                Error $"File does not exist when reading {guid} for {path}"
+                return! Error $"File does not exist when reading {guid} for {path}"
             else
-                match File.ReadAllLines file.FullName |> List.ofArray with
-                | [] -> Error $"File exists but is empty when reading {guid} for {path}"
+                let! lines = File.ReadAllLinesAsync file.FullName
+
+                match lines |> List.ofArray with
+                | [] -> return! Error $"File exists but is empty when reading {guid} for {path}"
                 | lines ->
                     let deserializationResults =
-                        lines |> List.map (fun line -> fromJson<Entry> (Json line))
+                        lines |> List.map (fun line -> Json.fromJson<Entry> (Json line))
 
                     match
                         deserializationResults
@@ -89,8 +88,9 @@ type FileReaderAndWriter
                             | Error error -> Some error)
                     with
                     | h :: _ ->
-                        Error
-                            $"At least one entry caused a deserialization error when reading {guid} for {path} (e.g. {h})"
+                        return!
+                            Error
+                                $"At least one entry caused a deserialization error when reading {guid} for {path} (e.g. {h})"
                     | _ ->
                         let entries =
                             deserializationResults
@@ -103,12 +103,14 @@ type FileReaderAndWriter
                         | Ok _ ->
                             // If there are any snapshots, only return the last snapshot and subsequent entries (if any)
                             let entries = fromLastSnapshot (entries |> List.rev) []
-                            NonEmptyList<Entry>.FromList entries
-                        | Error error -> Error $"Consistency check failed when reading {guid} for {path}: {error}"
+                            return! NonEmptyList<Entry>.FromList entries
+                        | Error error ->
+                            return! Error $"Consistency check failed when reading {guid} for {path}: {error}"
         with exn ->
-            Error $"Unexpected error reading {guid} for {path}: {exn.Message}"
+            return! Error $"Unexpected error reading {guid} for {path}: {exn.Message}"
+    }
 
-    let tryReadAll () =
+    let tryReadAll () = async {
         try
             if Directory.Exists path then
                 let files =
@@ -123,75 +125,88 @@ type FileReaderAndWriter
                     files
                     |> List.choose (fun (file, guid) -> if guid.IsNone then Some file else None)
                 with
-                | h :: _ -> [
-                    Error $"At least one .{fileExtension} file in {path} has a non-{nameof Guid} name (e.g. {h.Name})"
-                  ]
+                | h :: _ ->
+                    return [|
+                        Error
+                            $"At least one .{fileExtension} file in {path} has a non-{nameof Guid} name (e.g. {h.Name})"
+                    |]
                 | _ ->
-                    files
-                    |> List.choose snd
-                    |> List.map (fun guid ->
-                        match tryRead guid with
-                        | Ok entries -> Ok(guid, entries)
-                        | Error error -> Error error)
+                    return!
+                        files
+                        |> List.choose snd
+                        |> List.map (fun guid -> tryRead guid |> AsyncResult.map (fun list -> guid, list))
+                        |> Async.Parallel
             else
                 try
                     Directory.CreateDirectory path |> ignore
-                    []
-                with exn -> [ Error $"Error creating {path} when reading all: {exn.Message}" ]
-        with exn -> [ Error $"Unexpected error reading all for {path}: {exn.Message}" ]
+                    return [||]
+                with exn ->
+                    return [| Error $"Error creating {path} when reading all: {exn.Message}" |]
+        with exn ->
+            return [| Error $"Unexpected error reading all for {path}: {exn.Message}" |]
+    }
 
-    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: EntityId<User>, eventJson: Json, getSnapshot) =
+    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: EntityId<UserState>, eventJson: Json, getSnapshot) = asyncResult {
         try
             let guid = guid.ToString() // intentionally shadow as only need string representation
             let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))
             let utcNow = clock.GetUtcNow()
 
             match rvn.IsInitialRvn, File.Exists file.FullName with
-            | true, true -> Error $"File already exists when writing initial ({rvn}) for {guid} in {path}"
-            | false, false -> Error $"File does not exist when writing non-initial ({rvn}) for {guid} in {path}"
+            | true, true -> return! Error $"File already exists when writing initial ({rvn}) for {guid} in {path}"
+            | false, false -> return! Error $"File does not exist when writing non-initial ({rvn}) for {guid} in {path}"
             | true, false ->
-                let (Json eventJson') = toJson (EventJson(rvn, utcNow, auditUserId, eventJson))
-                File.WriteAllLines(file.FullName, [| eventJson' |])
-                Ok()
+                let (Json eventJson') = Json.toJson (EventJson(rvn, utcNow, auditUserId, eventJson))
+                do! File.WriteAllLinesAsync(file.FullName, [| eventJson' |])
+                return! Ok()
             | false, true ->
                 // Check that the Rvn of the last entry is consistent with the Rvn being written. (Note that unlike when reading, we do not check the consistency of the Rvns for all existing entries.)
-                match File.ReadAllLines file.FullName |> List.ofArray |> List.rev with
+                let! lines = File.ReadAllLinesAsync file.FullName
+
+                match lines |> List.ofArray |> List.rev with
                 | lastLine :: _ ->
-                    match fromJson<Entry> (Json lastLine) with
+                    match Json.fromJson<Entry> (Json lastLine) with
                     | Ok entry ->
                         if rvn.IsValidNextRvn(Some entry.Rvn) then
-                            let (Json eventJson') = toJson (EventJson(rvn, utcNow, auditUserId, eventJson))
+                            let (Json eventJson') = Json.toJson (EventJson(rvn, utcNow, auditUserId, eventJson))
                             let (Rvn rvn') = rvn
 
                             let lines =
                                 match snapshotFrequency with
                                 | Some snapshotFrequency when snapshotFrequency > 1u && rvn' % snapshotFrequency = 0u ->
-                                    let (Json snapshotJson) = toJson (SnapshotJson(rvn, getSnapshot ()))
+                                    let (Json snapshotJson) = Json.toJson (SnapshotJson(rvn, getSnapshot ()))
                                     [| eventJson'; snapshotJson |]
                                 | _ -> [| eventJson' |]
 
-                            File.AppendAllLines(file.FullName, lines)
-                            Ok()
+                            do! File.AppendAllLinesAsync(file.FullName, lines)
+                            return! Ok()
                         else
-                            Error $"Previous ({entry.Rvn}) not consistent when writing {rvn} for {guid} in {path}"
+                            return!
+                                Error $"Previous ({entry.Rvn}) not consistent when writing {rvn} for {guid} in {path}"
                     | Error error ->
-                        Error $"Deserialization error for last entry when writing {rvn} for {guid} in {path}: {error}"
-                | [] -> Error $"File exists but is empty when writing non-initial {rvn} for {guid} in {path}"
+                        return!
+                            Error
+                                $"Deserialization error for last entry when writing {rvn} for {guid} in {path}: {error}"
+                | [] -> return! Error $"File exists but is empty when writing non-initial {rvn} for {guid} in {path}"
         with exn ->
-            Error $"Unexpected error writing {rvn} for {guid} in {path}: {exn.Message}"
+            return! Error $"Unexpected error writing {rvn} for {guid} in {path}: {exn.Message}"
+    }
 
     let agent =
         MailboxProcessor.Start(fun inbox ->
             let rec loop () = async {
                 match! inbox.Receive() with
                 | Read(guid, reply) ->
-                    reply.Reply(tryRead guid)
+                    let! result = tryRead guid
+                    reply.Reply result
                     return! loop ()
                 | ReadAll reply ->
-                    reply.Reply(tryReadAll ())
+                    let! result = tryReadAll ()
+                    reply.Reply(result |> List.ofArray)
                     return! loop ()
                 | Write(guid, rvn, auditUserId, eventJson, getSnapsot, reply) ->
-                    reply.Reply(tryWrite (guid, rvn, auditUserId, eventJson, getSnapsot))
+                    let! result = tryWrite (guid, rvn, auditUserId, eventJson, getSnapsot)
+                    reply.Reply result
                     return! loop ()
             }
 

@@ -1,6 +1,5 @@
 namespace Aornota.Ubersweep.Tests.Server
 
-open Aornota.Ubersweep.Server.Common.JsonConverter
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Domain
 open Aornota.Ubersweep.Tests.Server.Common
@@ -10,78 +9,52 @@ open FsToolkit.ErrorHandling
 
 [<RequireQualifiedAccess>]
 module FileReaderAndWriterTests =
-    let private getAgents (testDir: TestDirectory, snapshotFrequency) =
-        new FileReaderAndWriter(
-            testDir.Root,
-            testDir.PartitionKey,
-            testDir.EntityKey,
-            snapshotFrequency,
-            FixedClock.instance
-        )
-
-    let private auditUserId: EntityId<User> = EntityId<User>.Initialize None
-
-    let private write<'event when 'event :> IEvent<'event>> (writer: IWriter, counter: Counter, event: 'event) =
-        writer.WriteAsync(
-            counter.Id.Guid,
-            counter.Rvn,
-            auditUserId,
-            event.EventJson toJson,
-            fun _ -> (counter.State :> IState<CounterState>).SnapshotJson toJson
-        )
-        |> Async.RunSynchronously
-
-    let private read (reader: IReader, guid) =
-        reader.ReadAsync guid |> Async.RunSynchronously
-
-    let private readAll (reader: IReader) =
-        reader.ReadAllAsync() |> Async.RunSynchronously
+    let private auditUser1Id = EntityId<UserState>.Initialize None
+    let private auditUser2Id = EntityId<UserState>.Initialize None
 
     let private happyTests =
         testList "Happy tests" [
-            testCase "WIP test"
-            <| fun _ ->
-                use testDir = new TestDirectory(None, nameof Counter)
-                use agent = getAgents (testDir, Some 4u)
+            testAsync "WIP test" {
+                use testDir = new TestPersistenceDirectory<Counter, CounterState>(None, Some 4u)
 
-                let reader, writer = agent :> IReader, agent :> IWriter
+                let! result = asyncResult {
+                    let expected, event = Counter.InitializeFromCommand(Initialize -1)
+                    let! _ = testDir.WriteAsync(expected, event, auditUser1Id)
+                    let! expected, event = expected |> Counter.apply Increment
+                    let! _ = testDir.WriteAsync(expected, event, auditUser1Id)
+                    let! expected, event = expected |> Counter.apply Increment
+                    let! _ = testDir.WriteAsync(expected, event, auditUser1Id)
+                    let! expected, event = expected |> Counter.apply Increment
+                    let! _ = testDir.WriteAsync(expected, event, auditUser1Id)
+                    let! expected, event = expected |> Counter.apply (MultiplyBy 2)
+                    let! _ = testDir.WriteAsync(expected, event, auditUser2Id)
+                    let! expected, event = expected |> Counter.apply Increment
+                    let! _ = testDir.WriteAsync(expected, event, auditUser1Id)
+                    let! expected, event = expected |> Counter.apply (MultiplyBy 2)
+                    let! _ = testDir.WriteAsync(expected, event, auditUser2Id)
+                    let! expected, event = expected |> Counter.apply Decrement
+                    let! _ = testDir.WriteAsync(expected, event, auditUser1Id)
 
-                let result = result {
-                    let counter, event = Counter.helper.InitializeFromCommand(Initialize -1)
-                    let! _ = write (writer, counter, event)
-                    let! counter, event = counter |> Counter.apply Increment
-                    let! _ = write (writer, counter, event)
-                    let! counter, event = counter |> Counter.apply Increment
-                    let! _ = write (writer, counter, event)
-                    let! counter, event = counter |> Counter.apply Decrement
-                    let! _ = write (writer, counter, event)
-                    let! counter, event = counter |> Counter.apply Increment
-                    let! _ = write (writer, counter, event)
-                    let! counter, event = counter |> Counter.apply Increment
-                    let! _ = write (writer, counter, event)
-                    let! counter, event = counter |> Counter.apply Decrement
-                    let! _ = write (writer, counter, event)
-                    let! counter, event = counter |> Counter.apply Increment
-                    let! _ = write (writer, counter, event)
-
-                    let guid = counter.Id.Guid
-                    let! entriesForGuid = read (reader, guid)
+                    let guid = (expected :> IEntity<CounterState>).Id.Guid
+                    let! entriesForGuid = testDir.ReadAsync guid
                     let! actualForGuid = Counter.mapper.FromEntries(guid, entriesForGuid)
 
+                    let! all = testDir.ReadAllAsync()
+
                     let! guidAndEntriesForOnly =
-                        match readAll reader with
+                        match all with
                         | [ result ] -> result
-                        | [] -> Error "Reading all returned empty"
-                        | _ -> Error "Reading all returned multiple"
+                        | [] -> Error "Reading all returned no items"
+                        | _ -> Error "Reading all returned multiple itens"
 
                     let! actualForOnly = Counter.mapper.FromEntries guidAndEntriesForOnly
 
-                    return actualForGuid, actualForOnly, counter
+                    return actualForGuid, actualForOnly, expected
                 }
 
                 match result with
                 | Ok(actualForGuid, actualForOnly, expected) ->
-                    let expectedCount = 2
+                    let expectedCount = 9
 
                     Expect.equal
                         expected.State.Count
@@ -91,16 +64,10 @@ module FileReaderAndWriterTests =
                     Expect.equal actualForGuid expected $"{nameof actualForGuid} shoudl equal {nameof expected}"
                     Expect.equal actualForOnly expected $"{nameof actualForOnly} shoudl equal {nameof expected}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be Ok"
+            }
+        // TODO: More happy tests
         ]
 
-    (* TODO: Sad tests...
-    let private sadTests =
-        testList "Sad tests" [
-            testCase "TEMP...Sad test"
-            <| fun _ ->
-                use _ = new TestDirectory(Some "Sad", nameof Counter, true)
-                Expect.stringContains "Speedos" "paedo" "There's no paedo in Speedos"
-        ]
-    *)
+    // TOD: Sad tests...
 
     let tests = testList $"{nameof FileReaderAndWriter} tests" [ happyTests ]

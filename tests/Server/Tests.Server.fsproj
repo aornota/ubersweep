@@ -10,7 +10,7 @@
     <None Include="paket.references" />
     <Compile Include="Common\Counter.fs" />
     <Compile Include="Common\FixedClock.fs" />
-    <Compile Include="Common\TestDirectory.fs" />
+    <Compile Include="Common\TestPersistenceDirectory.fs" />
     <Compile Include="FileReaderAndWriterTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
