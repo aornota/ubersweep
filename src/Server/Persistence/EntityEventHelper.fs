@@ -13,18 +13,18 @@ type EntityEventHelper<'entity, 'initEvent, 'event
     abstract member Evolve: Entity<'entity> -> 'event -> Entity<'entity>
 
     member this.FromEntries(guid, entries: NonEmptyList<Entry>) = result {
-        let rec processEntries eventEntries events =
-            match eventEntries with
+        let rec mapToEvents subsequentEntries events =
+            match subsequentEntries with
             | h :: t ->
                 match h with
                 | EventJson(_, _, _, json) ->
                     match Json.fromJson<'event> json with
-                    | Ok event -> processEntries t (event :: events)
+                    | Ok event -> mapToEvents t (event :: events)
                     | Error error -> Error error
-                | SnapshotJson _ -> Error $"{nameof eventEntries} contains a {nameof SnapshotJson}"
+                | SnapshotJson _ -> Error $"Subsequent entries contain a {nameof SnapshotJson}"
             | [] -> Ok(events |> List.rev)
 
-        let! entity, eventEntries =
+        let! entityFromFirstEntry, subsequentEntries =
             match entries.Head with
             | SnapshotJson(rvn, json) -> result {
                 let! state = Json.fromJson<'entity> json
@@ -35,7 +35,7 @@ type EntityEventHelper<'entity, 'initEvent, 'event
                 return this.InitializeFromEvent(guid, initEvent), entries.Tail
               }
 
-        let! events = processEntries eventEntries []
+        let! events = mapToEvents subsequentEntries []
 
-        return events |> List.fold this.Evolve entity
+        return events |> List.fold this.Evolve entityFromFirstEntry
     }

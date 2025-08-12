@@ -33,8 +33,8 @@ module FileReaderAndWriterTests =
             return! apply eventsAndAuditUserIds counter
         }
     *)
-    let private happyTests =
-        testList "Happy tests" [
+    let private happy =
+        testList "happy" [
             (* TODO: Move to "integration" tests?...
             testAsync "WIP test" {
                 use testDir =
@@ -366,8 +366,8 @@ module FileReaderAndWriterTests =
             }
         ]
 
-    let private sadTests =
-        testList "Sad tests" [
+    let private sad =
+        testList "sad" [
             testAsync "Read when file does not exist" {
                 use testDir = new TestPersistenceDirectory<Counter>(None, None)
                 let guid = Guid.NewGuid()
@@ -924,4 +924,4 @@ module FileReaderAndWriterTests =
             }
         ]
 
-    let tests = testList $"{nameof FileReaderAndWriter} tests" [ happyTests; sadTests ]
+    let tests = testList $"{nameof FileReaderAndWriter}" [ happy; sad ]
