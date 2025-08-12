@@ -5,6 +5,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <MSBuildWarningsAsMessages>
+      <!-- MSB3277 is "Found conflicts between different versions of {package} that could not be resolved", e.g. for FSharp.Core (8.0.0.0 and 9.0.0.0) -->
+      $(MSBuildWarningsAsMessages);MSB3277
+    </MSBuildWarningsAsMessages>
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />

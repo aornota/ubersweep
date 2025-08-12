@@ -1,4 +1,4 @@
-namespace Aornota.Ubersweep.Shared.Domain
+namespace Aornota.Ubersweep.Shared.Domain.Entities
 
 open Aornota.Ubersweep.Shared
 

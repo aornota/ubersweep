@@ -1,7 +1,7 @@
 namespace Aornota.Ubersweep.Server.Persistence
 
 open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain
+open Aornota.Ubersweep.Shared.Domain.Entities
 
 open System
 

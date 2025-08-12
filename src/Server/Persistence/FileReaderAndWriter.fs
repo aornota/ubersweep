@@ -2,7 +2,7 @@ namespace Aornota.Ubersweep.Server.Persistence
 
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain
+open Aornota.Ubersweep.Shared.Domain.Entities
 
 open FsToolkit.ErrorHandling
 open System
@@ -29,12 +29,16 @@ type FileReaderAndWriter
         clock: IPersistenceClock
     ) =
     [<Literal>]
-    let fileExtension = "entries"
+    static let fileExtension = "entries"
 
-    let path =
+    let subPath =
         match partitionKey with
-        | Some partitionKey -> Path.Combine(root, partitionKey, entityKey)
-        | None -> Path.Combine(root, entityKey)
+        | Some partitionKey -> Path.Combine(partitionKey, entityKey)
+        | None -> entityKey
+
+    let path = Path.Combine(root, subPath)
+
+    let pathForError = $"...\{DirectoryInfo(root).Name}\{subPath}"
 
     let tryRead (guid: Guid) = asyncResult {
         let rec checkConsistency entries lastRvn lastWasSnapshot =
@@ -45,17 +49,18 @@ type FileReaderAndWriter
                     if rvn.IsValidNextRvn lastRvn then
                         checkConsistency t (Some rvn) (Some false)
                     else
-                        Error $"{nameof EventJson} with {rvn} inconsistent with previous entry ({lastRvn})"
+                        Error $"{nameof EventJson} with {rvn} inconsistent with previous {nameof Entry} ({lastRvn})"
                 | SnapshotJson(rvn, _) ->
                     match lastWasSnapshot, lastRvn with
                     | Some true, _ ->
-                        Error $"{nameof SnapshotJson} with {rvn} but previous entry was also {nameof SnapshotJson}"
+                        Error
+                            $"{nameof SnapshotJson} with {rvn} but previous {nameof Entry} was also {nameof SnapshotJson}"
                     | _, Some lastRvn ->
                         if rvn = lastRvn then
                             checkConsistency t (Some rvn) (Some true)
                         else
-                            Error $"{nameof SnapshotJson} with {rvn} not equal to previous entry ({lastRvn})"
-                    | _, None -> Error $"{nameof SnapshotJson} with {rvn} but no previous entry"
+                            Error $"{nameof SnapshotJson} with {rvn} not equal to previous {nameof Entry} ({lastRvn})"
+                    | _, None -> Error $"{nameof SnapshotJson} with {rvn} but no previous {nameof Entry}"
             | [] -> Ok()
 
         let rec fromLastSnapshot entries acc =
@@ -70,12 +75,12 @@ type FileReaderAndWriter
             let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))
 
             if not (File.Exists file.FullName) then
-                return! Error $"File does not exist when reading {guid} for {path}"
+                return! Error $"File does not exist when reading {guid} for {pathForError}"
             else
                 let! lines = File.ReadAllLinesAsync file.FullName
 
                 match lines |> List.ofArray with
-                | [] -> return! Error $"File exists but is empty when reading {guid} for {path}"
+                | [] -> return! Error $"File exists but is empty when reading {guid} for {pathForError}"
                 | lines ->
                     let deserializationResults =
                         lines |> List.map (fun line -> Json.fromJson<Entry> (Json line))
@@ -90,7 +95,7 @@ type FileReaderAndWriter
                     | h :: _ ->
                         return!
                             Error
-                                $"At least one entry caused a deserialization error when reading {guid} for {path} (e.g. {h})"
+                                $"At least one entry caused a deserialization error when reading {guid} for {pathForError} (e.g. {h})"
                     | _ ->
                         let entries =
                             deserializationResults
@@ -105,9 +110,9 @@ type FileReaderAndWriter
                             let entries = fromLastSnapshot (entries |> List.rev) []
                             return! NonEmptyList<Entry>.FromList entries
                         | Error error ->
-                            return! Error $"Consistency check failed when reading {guid} for {path}: {error}"
+                            return! Error $"Consistency check failed when reading {guid} for {pathForError}: {error}"
         with exn ->
-            return! Error $"Unexpected error reading {guid} for {path}: {exn.Message}"
+            return! Error $"Unexpected error reading {guid} for {pathForError}: {exn.Message}"
     }
 
     let tryReadAll () = async {
@@ -128,12 +133,13 @@ type FileReaderAndWriter
                 | h :: _ ->
                     return [|
                         Error
-                            $"At least one .{fileExtension} file in {path} has a non-{nameof Guid} name (e.g. {h.Name})"
+                            $"At least one .{fileExtension} file in {pathForError} has a non-{nameof Guid} name (e.g. {h.Name})"
                     |]
                 | _ ->
                     return!
                         files
                         |> List.choose snd
+                        |> List.sort
                         |> List.map (fun guid -> tryRead guid |> AsyncResult.map (fun list -> guid, list))
                         |> Async.Parallel
             else
@@ -141,9 +147,9 @@ type FileReaderAndWriter
                     Directory.CreateDirectory path |> ignore
                     return [||]
                 with exn ->
-                    return [| Error $"Error creating {path} when reading all: {exn.Message}" |]
+                    return [| Error $"Error creating {pathForError} when reading all: {exn.Message}" |]
         with exn ->
-            return [| Error $"Unexpected error reading all for {path}: {exn.Message}" |]
+            return [| Error $"Unexpected error reading all for {pathForError}: {exn.Message}" |]
     }
 
     let tryWrite (guid: Guid, rvn: Rvn, auditUserId: EntityId<User>, eventJson: Json, getSnapshot) = asyncResult {
@@ -153,8 +159,9 @@ type FileReaderAndWriter
             let utcNow = clock.GetUtcNow()
 
             match rvn.IsInitialRvn, File.Exists file.FullName with
-            | true, true -> return! Error $"File already exists when writing initial ({rvn}) for {guid} in {path}"
-            | false, false -> return! Error $"File does not exist when writing non-initial ({rvn}) for {guid} in {path}"
+            | true, true -> return! Error $"File already exists when writing initial {rvn} for {guid} in {pathForError}"
+            | false, false ->
+                return! Error $"File does not exist when writing non-initial {rvn} for {guid} in {pathForError}"
             | true, false ->
                 let (Json eventJson') = Json.toJson (EventJson(rvn, utcNow, auditUserId, eventJson))
                 do! File.WriteAllLinesAsync(file.FullName, [| eventJson' |])
@@ -182,14 +189,17 @@ type FileReaderAndWriter
                             return! Ok()
                         else
                             return!
-                                Error $"Previous ({entry.Rvn}) not consistent when writing {rvn} for {guid} in {path}"
+                                Error
+                                    $"Previous {nameof Entry} ({entry.Rvn}) not consistent when writing {rvn} for {guid} in {pathForError}"
                     | Error error ->
                         return!
                             Error
-                                $"Deserialization error for last entry when writing {rvn} for {guid} in {path}: {error}"
-                | [] -> return! Error $"File exists but is empty when writing non-initial {rvn} for {guid} in {path}"
+                                $"Deserialization error for last entry when writing {rvn} for {guid} in {pathForError}: {error}"
+                | [] ->
+                    return!
+                        Error $"File exists but is empty when writing non-initial {rvn} for {guid} in {pathForError}"
         with exn ->
-            return! Error $"Unexpected error writing {rvn} for {guid} in {path}: {exn.Message}"
+            return! Error $"Unexpected error writing {rvn} for {guid} in {pathForError}: {exn.Message}"
     }
 
     let agent =
@@ -213,6 +223,8 @@ type FileReaderAndWriter
             loop ())
 
     // TODO: Log unhandled errors (via agent.Error.Add)...
+
+    static member FileExtension = fileExtension
 
     interface IReader with
         member _.ReadAsync guid =

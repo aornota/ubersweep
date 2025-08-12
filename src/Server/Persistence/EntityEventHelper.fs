@@ -1,7 +1,7 @@
 namespace Aornota.Ubersweep.Server.Persistence
 
 open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain
+open Aornota.Ubersweep.Shared.Domain.Entities
 
 open FsToolkit.ErrorHandling
 open System
@@ -28,7 +28,7 @@ type EntityEventHelper<'entity, 'initEvent, 'event
             match entries.Head with
             | SnapshotJson(rvn, json) -> result {
                 let! state = Json.fromJson<'entity> json
-                return Entity<'entity>(EntityId<'entity>.Initialize(Some guid), rvn, state), entries.Tail
+                return Entity<'entity>(EntityId<'entity>.FromGuid guid, rvn, state), entries.Tail
               }
             | EventJson(_, _, _, json) -> result {
                 let! initEvent = Json.fromJson<'initEvent> json

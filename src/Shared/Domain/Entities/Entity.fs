@@ -1,4 +1,4 @@
-namespace Aornota.Ubersweep.Shared.Domain
+namespace Aornota.Ubersweep.Shared.Domain.Entities
 
 open Aornota.Ubersweep.Shared
 
@@ -8,10 +8,8 @@ type EntityId<'entity> =
     private
     | Id of guid: Guid
 
-    static member Initialize guid =
-        match guid with
-        | Some guid -> Id guid
-        | None -> Id(Guid.NewGuid())
+    static member Create() = Id(Guid.NewGuid())
+    static member FromGuid guid = Id guid
 
     member this.Guid =
         let (Id guid) = this

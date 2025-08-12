@@ -2,7 +2,7 @@ namespace Aornota.Ubersweep.Tests.Server.Common
 
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain
+open Aornota.Ubersweep.Shared.Domain.Entities
 
 open FsToolkit.ErrorHandling
 
@@ -44,7 +44,7 @@ type CounterEventHelper() =
     inherit EntityEventHelper<Counter, CounterInitEvent, CounterEvent>()
 
     override _.InitializeFromEvent(guid, Initialized count) =
-        Entity<Counter>(EntityId<Counter>.Initialize(Some guid), Rvn.InitialRvn, { Count = count })
+        Entity<Counter>(EntityId<Counter>.FromGuid guid, Rvn.InitialRvn, { Count = count })
 
     override _.Evolve entity event =
         let state =
@@ -84,8 +84,8 @@ module Counter =
 
     let eventHelper = CounterEventHelper()
 
-    let initializeFromCommand (Initialize count) =
-        Entity<Counter>(EntityId<Counter>.Initialize None, Rvn.InitialRvn, { Count = count }), Initialized count
+    let initializeFromCommand (guid, Initialize count) =
+        Entity<Counter>(EntityId<Counter>.FromGuid guid, Rvn.InitialRvn, { Count = count }), Initialized count
 
     let apply command entity = result {
         let! event = decide command entity
