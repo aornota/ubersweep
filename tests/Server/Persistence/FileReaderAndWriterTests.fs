@@ -1,4 +1,4 @@
-namespace Aornota.Ubersweep.Tests.Server
+namespace Aornota.Ubersweep.Tests.Server.Persistence
 
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared

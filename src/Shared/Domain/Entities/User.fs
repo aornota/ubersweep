@@ -16,7 +16,9 @@ type UserInitCommand = Create of userName: string * password: string * userType:
 
 type UserCommand =
     | ChangeUserType of userType: UserType
-    | ResetPassword of password: string
+    // TODO: Should this have "existing" password?...
+    | ChangePassword of password: string * confirmPassword: string
+    | ResetPassword of password: string * confirmPassword: string
 
 type User = {
     UserName: string

@@ -1,12 +1,13 @@
 namespace Aornota.Ubersweep.Server.Entities
 
+open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared
 open Aornota.Ubersweep.Shared.Domain.Entities
 
 open FsToolkit.ErrorHandling
 
-// TODO: Handle Password[Salt|Hash] properly - and think about permissions...
+// TODO: Think about permissions...
 
 type UserInitEvent =
     | Created of userName: string * passwordSalt: string * passwordHash: string * userType: UserType
@@ -16,6 +17,7 @@ type UserInitEvent =
 
 type UserEvent =
     | UserTypeChanged of userType: UserType
+    | PasswordChanged of passwordSalt: string * passwordHash: string
     | PasswordReset of passwordSalt: string * passwordHash: string
 
     interface IEvent with
@@ -44,12 +46,17 @@ type UserEventHelper() =
                 entity.State with
                     UserType = userType
               }
+            | PasswordChanged(passwordSalt, passwordHash) -> {
+                entity.State with
+                    PasswordSalt = passwordSalt
+                    PasswordHash = passwordHash
+                    MustChangePasswordReason = None
+              }
             | PasswordReset(passwordSalt, passwordHash) -> {
                 entity.State with
                     PasswordSalt = passwordSalt
                     PasswordHash = passwordHash
                     MustChangePasswordReason = Some PasswordHasBeenReset
-
               }
 
         entity.Evolve state
@@ -60,12 +67,24 @@ module User =
     let private decide command (_: Entity<User>) =
         match command with
         | ChangeUserType userType -> Ok(UserTypeChanged userType)
-        | ResetPassword _ -> Ok(PasswordReset("salt", "hash"))
+        | ChangePassword(password, confirmPassword) ->
+            if confirmPassword <> password then
+                Error "TODO..."
+            else
+                let passwordSalt = salt ()
+                Ok(PasswordChanged(passwordSalt, hash (password, passwordSalt)))
+        | ResetPassword(password, confirmPassword) ->
+            if confirmPassword <> password then
+                Error "TODO..."
+            else
+                let passwordSalt = salt ()
+                Ok(PasswordReset(passwordSalt, hash (password, passwordSalt)))
 
     let eventHelper = UserEventHelper()
 
-    let initializeFromCommand (guid, Create(userName, _, userType)) =
-        let passwordSalt, passwordHash = "salt", "hash"
+    let initializeFromCommand (guid, Create(userName, password, userType)) =
+        let passwordSalt = salt ()
+        let passwordHash = hash (password, passwordSalt)
 
         Entity<User>(
             EntityId<User>.FromGuid guid,
