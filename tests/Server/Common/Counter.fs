@@ -6,10 +6,6 @@ open Aornota.Ubersweep.Shared.Domain.Entities
 
 open FsToolkit.ErrorHandling
 
-(* For domain entities:
-     -- CounterInitCommand | CounterCommand | Counter would be defined in Shared project?
-     -- CounterInitEvent | CounterEvent | CounterEventHelper would be defined in Server project? *)
-
 type CounterInitCommand = Initialize of count: int
 
 type CounterCommand =
