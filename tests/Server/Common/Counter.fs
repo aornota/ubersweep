@@ -8,7 +8,7 @@ open FsToolkit.ErrorHandling
 
 (* For domain entities:
      -- CounterInitCommand | CounterCommand | Counter would be defined in Shared project?
-     -- CounterInitEvent | CounterEvent | CounterMapper would be defined in Server project? *)
+     -- CounterInitEvent | CounterEvent | CounterEventHelper would be defined in Server project? *)
 
 type CounterInitCommand = Initialize of count: int
 

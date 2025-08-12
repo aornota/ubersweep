@@ -37,22 +37,20 @@ type TestPersistenceDirectory<'entity when 'entity :> IEntity and 'entity: equal
 
     let reader, writer = agent :> IReader, agent :> IWriter
 
+    member _.Path = path
+    member _.PathForError = pathForError
     member _.ReadAsync guid = reader.ReadAsync guid
     member _.ReadAllAsync() = reader.ReadAllAsync()
 
-    (* TODO: Reenable for "integration" tests?...
     member _.WriteAsync<'event when 'event :> IEvent>
         (entity: Entity<'entity>, event: 'event, auditUserId: EntityId<User>)
         =
         writer.WriteAsync(entity.Id.Guid, entity.Rvn, auditUserId, event.EventJson, (fun _ -> entity.SnapshotJson))
-    *)
+
     member _.WriteAsync<'event when 'event :> IEvent>
         (guid, rvn, event: 'event, auditUserId: EntityId<User>, snapshotJson)
         =
         writer.WriteAsync(guid, rvn, auditUserId, event.EventJson, (fun _ -> snapshotJson))
-
-    member _.Path = path
-    member _.PathForError = pathForError
 
     member _.TryReadAllLinesAsync(guid: Guid) = asyncResult {
         try

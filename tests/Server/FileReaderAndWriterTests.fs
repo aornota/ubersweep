@@ -11,7 +11,6 @@ open System
 
 [<RequireQualifiedAccess>]
 module FileReaderAndWriterTests =
-    (* TODO: Move to "integration" tests?...
     let private initializeAndApply
         (guid, initEventAndAuditUserId, eventsAndAuditUserIds, testDir: TestPersistenceDirectory<Counter>)
         =
@@ -32,60 +31,9 @@ module FileReaderAndWriterTests =
 
             return! apply eventsAndAuditUserIds counter
         }
-    *)
+
     let private happy =
         testList "happy" [
-            (* TODO: Move to "integration" tests?...
-            testAsync "WIP test" {
-                use testDir =
-                    new TestPersistenceDirectory<Counter>(None, Some 3u, retainOnDispose = true)
-
-                let! result = asyncResult {
-                    let guid = Guid.NewGuid()
-
-                    let eventsAndAuditUserIds = [
-                        Increment, auditUser1Id
-                        Increment, auditUser1Id
-                        Increment, auditUser1Id
-                        MultiplyBy 2, auditUser2Id
-                        Increment, auditUser1Id
-                        MultiplyBy 2, auditUser2Id
-                        Decrement, auditUser1Id
-                    ]
-
-                    let! expected =
-                        initializeAndApply (guid, (Initialize -1, auditUser1Id), eventsAndAuditUserIds, testDir)
-
-                    let! entriesForGuid = testDir.ReadAsync guid
-                    let! actualForGuid = Counter.eventHelper.FromEntries(guid, entriesForGuid)
-
-                    let! all = testDir.ReadAllAsync()
-
-                    let! guidAndEntriesForOnly =
-                        match all with
-                        | [ result ] -> result
-                        | [] -> Error "Reading all returned no items"
-                        | _ -> Error "Reading all returned multiple itens"
-
-                    let! actualForOnly = Counter.eventHelper.FromEntries guidAndEntriesForOnly
-
-                    return actualForGuid, actualForOnly, expected
-                }
-
-                match result with
-                | Ok(actualForGuid, actualForOnly, expected) ->
-                    let expectedCount = 9
-
-                    Expect.equal
-                        expected.State.Count
-                        expectedCount
-                        $"Count for {nameof expected} should equal {expectedCount}"
-
-                    Expect.equal actualForGuid expected $"{nameof actualForGuid} should equal {nameof expected}"
-                    Expect.equal actualForOnly expected $"{nameof actualForOnly} should equal {nameof expected}"
-                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
-            }
-            *)
             testAsync "Read (initial event entry) with no partition" {
                 use testDir = new TestPersistenceDirectory<Counter>(None, None)
                 let guid = Guid.NewGuid()
@@ -924,4 +872,147 @@ module FileReaderAndWriterTests =
             }
         ]
 
-    let tests = testList $"{nameof FileReaderAndWriter}" [ happy; sad ]
+    let private integration =
+        testList "integration" [
+            testAsync "Write multiple entities (without snapshots) and read (separately) with no partition" {
+                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+
+                let! result = asyncResult {
+                    let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
+
+                    let! expected1 =
+                        initializeAndApply (
+                            guid1,
+                            (Initialize -1, auditUser1Id),
+                            [
+                                Increment, auditUser1Id
+                                Increment, auditUser1Id
+                                Increment, auditUser1Id
+                                MultiplyBy 2, auditUser2Id
+                                Increment, auditUser1Id
+                                MultiplyBy 2, auditUser2Id
+                                Decrement, auditUser1Id
+                            ],
+                            testDir
+                        )
+
+                    let! entries1 = testDir.ReadAsync guid1
+                    let! actual1 = Counter.eventHelper.FromEntries(guid1, entries1)
+
+                    let! expected2 =
+                        initializeAndApply (
+                            guid2,
+                            (Initialize 10, auditUser1Id),
+                            [
+                                DivideBy 5, auditUser1Id
+                                Increment, auditUser1Id
+                                Increment, auditUser1Id
+                                MultiplyBy 3, auditUser2Id
+                                Increment, auditUser1Id
+                                MultiplyBy 2, auditUser2Id
+                                Decrement, auditUser1Id
+                            ],
+                            testDir
+                        )
+
+                    let! entries2 = testDir.ReadAsync guid2
+                    let! actual2 = Counter.eventHelper.FromEntries(guid2, entries2)
+
+                    return actual1, expected1, actual2, expected2
+                }
+
+                match result with
+                | Ok(actual1, expected1, actual2, expected2) ->
+                    let expectedCount1, expectedCount2 = 9, 25
+
+                    Expect.equal
+                        expected1.State.Count
+                        expectedCount1
+                        $"Count for {nameof expected1} should equal {expectedCount1}"
+
+                    Expect.equal
+                        expected2.State.Count
+                        expectedCount2
+                        $"Count for {nameof expected2} should equal {expectedCount2}"
+
+                    Expect.equal actual1 expected1 $"{nameof actual1} should equal {nameof expected1}"
+                    Expect.equal actual2 expected2 $"{nameof actual2} should equal {nameof expected2}"
+                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+            }
+            testAsync "Write multiple entities (with snapshots) and read (all) with partition" {
+                use testDir = new TestPersistenceDirectory<Counter>(Some "2026", Some 3u)
+
+                let! result = asyncResult {
+                    let guid1 = Guid.Empty // use empty Guid to ensure deterministic ordering of result
+                    let guid2 = Guid.NewGuid()
+
+                    let! expected1 =
+                        initializeAndApply (
+                            guid1,
+                            (Initialize -1, auditUser1Id),
+                            [
+                                Increment, auditUser1Id
+                                Increment, auditUser1Id
+                                Increment, auditUser1Id
+                                MultiplyBy 2, auditUser2Id
+                                Increment, auditUser1Id
+                                MultiplyBy 2, auditUser2Id
+                                Decrement, auditUser1Id
+                            ],
+                            testDir
+                        )
+
+                    let! expected2 =
+                        initializeAndApply (
+                            guid2,
+                            (Initialize 10, auditUser1Id),
+                            [
+                                DivideBy 5, auditUser1Id
+                                Increment, auditUser1Id
+                                Increment, auditUser1Id
+                                MultiplyBy 3, auditUser2Id
+                                Increment, auditUser1Id
+                                MultiplyBy 2, auditUser2Id
+                                Decrement, auditUser1Id
+                            ],
+                            testDir
+                        )
+
+                    let! all = testDir.ReadAllAsync()
+
+                    let! result1, result2 =
+                        match all with
+                        | [ result1; result2 ] -> Ok(result1, result2)
+                        | [] -> Error "Reading all returned no results"
+                        | _ -> Error $"Reading all returned an unexpected number ({all.Length}) of results"
+
+                    let! guidAndEntries1 = result1
+                    let! actual1 = Counter.eventHelper.FromEntries guidAndEntries1
+
+                    let! guidAndEntries2 = result2
+                    let! actual2 = Counter.eventHelper.FromEntries guidAndEntries2
+
+                    return actual1, expected1, actual2, expected2
+                }
+
+                match result with
+                | Ok(actual1, expected1, actual2, expected2) ->
+                    let expectedCount1, expectedCount2 = 9, 25
+
+                    Expect.equal
+                        expected1.State.Count
+                        expectedCount1
+                        $"Count for {nameof expected1} should equal {expectedCount1}"
+
+                    Expect.equal
+                        expected2.State.Count
+                        expectedCount2
+                        $"Count for {nameof expected2} should equal {expectedCount2}"
+
+                    Expect.equal actual1 expected1 $"{nameof actual1} should equal {nameof expected1}"
+                    Expect.equal actual2 expected2 $"{nameof actual2} should equal {nameof expected2}"
+                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+            }
+        ]
+
+    let tests = testList $"{nameof FileReaderAndWriter}" [ happy; sad; integration ]
