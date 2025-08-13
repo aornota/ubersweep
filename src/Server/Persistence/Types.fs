@@ -1,12 +1,12 @@
 namespace Aornota.Ubersweep.Server.Persistence
 
-open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain.Entities
+open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
 
 open System
 
 type Entry =
-    | EventJson of rvn: Rvn * timestampUtc: DateTime * auditUserId: EntityId<User> * json: Json
+    | EventJson of rvn: Rvn * timestampUtc: DateTime * auditUserId: EntityId<UserId> * json: Json
     | SnapshotJson of rvn: Rvn * json: Json
 
     member this.Rvn =
@@ -24,7 +24,7 @@ type IReader =
     abstract ReadAllAsync: unit -> Async<Result<Guid * NonEmptyList<Entry>, string> list>
 
 type IWriter =
-    abstract WriteAsync: Guid * Rvn * EntityId<User> * Json * GetSnapshot -> Async<Result<unit, string>>
+    abstract WriteAsync: Guid * Rvn * EntityId<UserId> * Json * GetSnapshot -> Async<Result<unit, string>>
 
 type IPersistenceClock =
     abstract GetUtcNow: unit -> DateTime

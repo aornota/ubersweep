@@ -2,8 +2,8 @@ namespace Aornota.Ubersweep.Server.Persistence
 
 open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Persistence
-open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain.Entities
+open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
 open Serilog
@@ -16,12 +16,11 @@ type private Input =
     | Write of
         guid: Guid *
         rvn: Rvn *
-        auditUserId: EntityId<User> *
+        auditUserId: EntityId<UserId> *
         eventJson: Json *
         getSnapsot: GetSnapshot *
         reply: AsyncReplyChannel<Result<unit, string>>
 
-// TODO: Add ILogger...
 type FileReaderAndWriter
     (
         root: string,
@@ -167,7 +166,7 @@ type FileReaderAndWriter
             return [| Error $"Unexpected error reading all for {pathForError}: {exn.Message}" |]
     }
 
-    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: EntityId<User>, eventJson: Json, getSnapshot) = asyncResult {
+    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: EntityId<UserId>, eventJson: Json, getSnapshot) = asyncResult {
         try
             let guid = guid.ToString() // intentionally shadow as only need string representation
             let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))
@@ -282,4 +281,6 @@ type FileReaderAndWriter
             agent.PostAndAsyncReply(fun reply -> Write(guid, rvn, auditUserId, eventJson, getSnapshot, reply))
 
     interface IDisposable with
-        member _.Dispose() = agent.Dispose()
+        member _.Dispose() =
+            agent.Dispose()
+            logger.Information "Disposed"

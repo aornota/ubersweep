@@ -1,40 +1,31 @@
-namespace Aornota.Ubersweep.Shared.Domain.Entities
+namespace Aornota.Ubersweep.Server.Entities
 
-open Aornota.Ubersweep.Shared
+open Aornota.Ubersweep.Shared.Entities
+open Aornota.Ubersweep.Shared.Common
 
 open System
-
-type EntityId<'entity> =
-    private
-    | Id of guid: Guid
-
-    static member Create() = Id(Guid.NewGuid())
-    static member FromGuid guid = Id guid
-
-    member this.Guid =
-        let (Id guid) = this
-        guid
 
 type IEntity =
     abstract SnapshotJson: Json
 
-type private EntityInner<'entity when 'entity :> IEntity> = {
-    Id: EntityId<'entity>
+type private EntityInner<'id, 'entity when 'id :> IId and 'entity :> IEntity> = {
+    Id: EntityId<'id>
     Rvn: Rvn
     State: 'entity
 }
 
-type Entity<'entity when 'entity :> IEntity and 'entity: equality>(id: EntityId<'entity>, rvn: Rvn, state: 'entity) =
+type Entity<'id, 'entity when 'id :> IId and 'entity :> IEntity and 'entity: equality>
+    (id: EntityId<'id>, rvn: Rvn, state: 'entity) =
     let mutable entity = { Id = id; Rvn = rvn; State = state }
 
     override this.Equals other =
         match other with
-        | :? Entity<'entity> as other -> this.Equals other
+        | :? Entity<'id, 'entity> as other -> this.Equals other
         | _ -> false
 
     override _.GetHashCode() = entity.GetHashCode()
 
-    member _.Equals(other: Entity<'entity>) =
+    member _.Equals(other: Entity<'id, 'entity>) =
         entity.Id = other.Id && entity.Rvn = other.Rvn && entity.State = other.State
 
     member _.Id = entity.Id
@@ -49,7 +40,7 @@ type Entity<'entity when 'entity :> IEntity and 'entity: equality>(id: EntityId<
                 State = state
         }
 
-    interface IEquatable<Entity<'entity>> with
+    interface IEquatable<Entity<'id, 'entity>> with
         member this.Equals other = this.Equals other
 
 type IEvent =

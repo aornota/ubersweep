@@ -1,14 +1,15 @@
 namespace Aornota.Ubersweep.Tests.Server.Common
 
+open Aornota.Ubersweep.Server.Entities
 open Aornota.Ubersweep.Server.Persistence
-open Aornota.Ubersweep.Shared.Domain.Entities
+open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
 open Serilog
 open System
 open System.IO
 
-type TestPersistenceDirectory<'entity when 'entity :> IEntity and 'entity: equality>
+type TestPersistenceDirectory<'id, 'entity when 'id :> IId and 'entity :> IEntity and 'entity: equality>
     (partitionName: PartitionName option, snapshotFrequency: uint option, ?retainOnDispose, ?skipCreatingDir) =
     let retainOnDispose = defaultArg retainOnDispose false
     let skipCreatingDir = defaultArg skipCreatingDir false
@@ -44,12 +45,12 @@ type TestPersistenceDirectory<'entity when 'entity :> IEntity and 'entity: equal
     member _.ReadAllAsync() = reader.ReadAllAsync()
 
     member _.WriteAsync<'event when 'event :> IEvent>
-        (entity: Entity<'entity>, event: 'event, auditUserId: EntityId<User>)
+        (entity: Entity<'id, 'entity>, event: 'event, auditUserId: EntityId<UserId>)
         =
         writer.WriteAsync(entity.Id.Guid, entity.Rvn, auditUserId, event.EventJson, (fun _ -> entity.SnapshotJson))
 
     member _.WriteAsync<'event when 'event :> IEvent>
-        (guid, rvn, event: 'event, auditUserId: EntityId<User>, snapshotJson)
+        (guid, rvn, event: 'event, auditUserId: EntityId<UserId>, snapshotJson)
         =
         writer.WriteAsync(guid, rvn, auditUserId, event.EventJson, (fun _ -> snapshotJson))
 

@@ -1,4 +1,4 @@
-namespace Aornota.Ubersweep.Shared
+namespace Aornota.Ubersweep.Shared.Common
 
 type Json = Json of json: string
 

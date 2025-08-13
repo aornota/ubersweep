@@ -1,10 +1,17 @@
 namespace Aornota.Ubersweep.Tests.Server.Common
 
+open Aornota.Ubersweep.Server.Entities
 open Aornota.Ubersweep.Server.Persistence
-open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain.Entities
+open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
+
+type CounterId =
+    private
+    | UserId
+
+    interface IId
 
 type CounterInitCommand = Initialize of count: int
 
@@ -37,10 +44,10 @@ type CounterEvent =
         member this.EventJson = Json.toJson this
 
 type CounterEventHelper() =
-    inherit EntityEventHelper<Counter, CounterInitEvent, CounterEvent>()
+    inherit EntityEventHelper<CounterId, Counter, CounterInitEvent, CounterEvent>()
 
     override _.InitializeFromEvent(guid, Initialized count) =
-        Entity<Counter>(EntityId<Counter>.FromGuid guid, Rvn.InitialRvn, { Count = count })
+        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn.InitialRvn, { Count = count })
 
     override _.Evolve entity event =
         let state =
@@ -67,7 +74,7 @@ type CounterEventHelper() =
 
 [<RequireQualifiedAccess>]
 module Counter =
-    let private decide command (_: Entity<Counter>) =
+    let private decide command (_: Entity<CounterId, Counter>) =
         match command with
         | Increment -> Ok Incremented
         | Decrement -> Ok Decremented
@@ -81,7 +88,8 @@ module Counter =
     let eventHelper = CounterEventHelper()
 
     let initializeFromCommand (guid, Initialize count) =
-        Entity<Counter>(EntityId<Counter>.FromGuid guid, Rvn.InitialRvn, { Count = count }), Initialized count
+        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn.InitialRvn, { Count = count }),
+        Initialized count
 
     let apply command entity = result {
         let! event = decide command entity

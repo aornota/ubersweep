@@ -1,10 +1,11 @@
 namespace Aornota.Ubersweep.Server
 
 open Aornota.Ubersweep.Server.Common
+open Aornota.Ubersweep.Server.Entities
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Server.TEMP
-open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain.Entities
+open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
 open Aornota.Ubersweep.Shared.TEMP
 
 open Giraffe
@@ -14,6 +15,66 @@ open Microsoft.Extensions.DependencyInjection
 open SAFE
 open Serilog
 open System
+
+module private Startup =
+    [<Literal>]
+    let private SuperUserName = "superuser"
+
+    [<Literal>]
+    let private SuperUserPassword = "ubersweep"
+
+    let checkUsers (persistenceFactory: IPersistenceFactory, logger: ILogger) = async {
+        logger.Information "...checking Users..."
+
+        let reader = persistenceFactory.GetReader<User> None
+        let! all = reader.ReadAllAsync()
+
+        if all.Length > 0 then
+            all
+            |> List.iter (fun result ->
+                match result with
+                | Ok(guid, entries) ->
+                    match User.eventHelper.FromEntries(guid, entries) with
+                    | Ok _ -> ()
+                    | Error error -> logger.Error("...error processing entries for User {guid}: {error}", guid, error)
+                | Error error -> logger.Error("...error reading entries for User: {error}", error))
+
+            logger.Information("...{length} User/s checked", all.Length)
+        else
+            logger.Information("...creating {type} because no Users exist...", SuperUser)
+
+            let superUser, initEvent =
+                User.initializeFromCommand (Guid.Empty, CreateUser(SuperUserName, SuperUserPassword, SuperUser))
+
+            let writer = persistenceFactory.GetWriter<User> None
+
+            let! result =
+                writer.WriteAsync(
+                    superUser.Id.Guid,
+                    Rvn.InitialRvn,
+                    superUser.Id,
+                    (initEvent: IEvent).EventJson,
+                    fun _ -> superUser.SnapshotJson
+                )
+
+            match result with
+            | Ok _ ->
+                match! reader.ReadAsync superUser.Id.Guid with
+                | Ok entries ->
+                    match User.eventHelper.FromEntries(superUser.Id.Guid, entries) with
+                    | Ok _ -> logger.Information("...{type} created", SuperUser)
+                    | Error error ->
+                        logger.Error(
+                            "...error processing entries for {type} {guid}: {error}",
+                            SuperUser,
+                            superUser.Id.Guid,
+                            error
+                        )
+                | Error error -> logger.Error("...error reading entries for {type}: {error}", SuperUser, error)
+            | Error error -> logger.Error("...error creating {type}: {error}", SuperUser, error)
+
+        ()
+    }
 
 type Startup(config) =
     do
@@ -25,31 +86,12 @@ type Startup(config) =
 
     let logger = SourcedLogger.Create<Startup> Log.Logger
 
-    do logger.Information "Started"
+    do logger.Information "Starting..."
 
-    (* TEMP: To check logging...
     let persistenceFactory =
         FilePersistenceFactory(config, PersistenceClock(), logger) :> IPersistenceFactory
 
-    let reader = persistenceFactory.GetReader<User> None
-
-    let writer = persistenceFactory.GetWriter<User> None
-
-    let _ = reader.ReadAllAsync() |> Async.RunSynchronously
-
-    let _ = reader.ReadAsync(Guid.NewGuid()) |> Async.RunSynchronously
-    let _ = reader.ReadAsync Guid.Empty |> Async.RunSynchronously
-
-    let _ =
-        writer.WriteAsync(
-            Guid.NewGuid(),
-            Rvn.InitialRvn,
-            EntityId<User>.Create(),
-            Json "InitEvent",
-            (fun _ -> Json "Snapshot")
-        )
-        |> Async.RunSynchronously
-    *)
+    do Startup.checkUsers (persistenceFactory, logger) |> Async.RunSynchronously
 
     let todosApi ctx = {
         Shared.getTodos = fun () -> async { return Storage.todos |> List.ofSeq }
@@ -68,8 +110,5 @@ type Startup(config) =
         builder.UseFileServer().UseGiraffe webApp
 
     member __.ConfigureServices(services: IServiceCollection) =
-        services
-            .AddGiraffe()
-            .AddSingleton(FilePersistenceFactory)
-            .AddSingleton(Log.Logger)
+        services.AddGiraffe().AddSingleton(persistenceFactory).AddSingleton(Log.Logger)
         |> ignore

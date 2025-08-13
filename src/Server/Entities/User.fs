@@ -2,15 +2,26 @@ namespace Aornota.Ubersweep.Server.Entities
 
 open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Persistence
-open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain.Entities
+open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
 
 // TODO: Think about permissions...
 
+type User = {
+    UserName: string
+    PasswordSalt: string
+    PasswordHash: string
+    UserType: UserType
+    MustChangePasswordReason: MustChangePasswordReason option
+} with
+
+    interface IEntity with
+        member this.SnapshotJson = Json.toJson this
+
 type UserInitEvent =
-    | Created of userName: string * passwordSalt: string * passwordHash: string * userType: UserType
+    | UserCreated of userName: string * passwordSalt: string * passwordHash: string * userType: UserType
 
     interface IEvent with
         member this.EventJson = Json.toJson this
@@ -24,11 +35,11 @@ type UserEvent =
         member this.EventJson = Json.toJson this
 
 type UserEventHelper() =
-    inherit EntityEventHelper<User, UserInitEvent, UserEvent>()
+    inherit EntityEventHelper<UserId, User, UserInitEvent, UserEvent>()
 
-    override _.InitializeFromEvent(guid, Created(userName, passwordSalt, passwordHash, userType)) =
-        Entity<User>(
-            EntityId<User>.FromGuid guid,
+    override _.InitializeFromEvent(guid, UserCreated(userName, passwordSalt, passwordHash, userType)) =
+        Entity<UserId, User>(
+            EntityId<UserId>.FromGuid guid,
             Rvn.InitialRvn,
             {
                 UserName = userName
@@ -64,7 +75,7 @@ type UserEventHelper() =
 
 [<RequireQualifiedAccess>]
 module User =
-    let private decide command (_: Entity<User>) =
+    let private decide command (_: Entity<UserId, User>) =
         match command with
         | ChangeUserType userType -> Ok(UserTypeChanged userType)
         | ChangePassword(password, confirmPassword) ->
@@ -82,12 +93,12 @@ module User =
 
     let eventHelper = UserEventHelper()
 
-    let initializeFromCommand (guid, Create(userName, password, userType)) =
+    let initializeFromCommand (guid, CreateUser(userName, password, userType)) =
         let passwordSalt = salt ()
         let passwordHash = hash (password, passwordSalt)
 
-        Entity<User>(
-            EntityId<User>.FromGuid guid,
+        Entity<UserId, User>(
+            EntityId<UserId>.FromGuid guid,
             Rvn.InitialRvn,
             {
                 UserName = userName
@@ -97,7 +108,7 @@ module User =
                 MustChangePasswordReason = Some FirstSignIn
             }
         ),
-        Created(userName, passwordSalt, passwordHash, userType)
+        UserCreated(userName, passwordSalt, passwordHash, userType)
 
     let apply command entity = result {
         let! event = decide command entity

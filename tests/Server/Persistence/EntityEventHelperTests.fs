@@ -1,8 +1,9 @@
 namespace Aornota.Ubersweep.Tests.Server.Persistence
 
+open Aornota.Ubersweep.Server.Entities
 open Aornota.Ubersweep.Server.Persistence
-open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain.Entities
+open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
 open Aornota.Ubersweep.Tests.Server.Common
 
 open Expecto
@@ -31,7 +32,7 @@ module EntityEventHelperTests =
                 match result with
                 | Ok counter ->
                     let expectedCounter =
-                        Entity<Counter>(EntityId<Counter>.FromGuid guid, Rvn.InitialRvn, { Count = -1 })
+                        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn.InitialRvn, { Count = -1 })
 
                     Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
@@ -57,7 +58,7 @@ module EntityEventHelperTests =
                 match result with
                 | Ok counter ->
                     let expectedCounter =
-                        Entity<Counter>(EntityId<Counter>.FromGuid guid, Rvn 3u, { Count = 1 })
+                        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn 3u, { Count = 1 })
 
                     Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
@@ -82,7 +83,7 @@ module EntityEventHelperTests =
                 match result with
                 | Ok counter ->
                     let expectedCounter =
-                        Entity<Counter>(EntityId<Counter>.FromGuid guid, Rvn 4u, { Count = 2 })
+                        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn 4u, { Count = 2 })
 
                     Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"

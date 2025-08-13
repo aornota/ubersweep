@@ -1,4 +1,4 @@
-namespace Aornota.Ubersweep.Shared
+namespace Aornota.Ubersweep.Shared.Common
 
 type Rvn =
     | Rvn of rvn: uint

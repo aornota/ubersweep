@@ -1,8 +1,8 @@
 namespace Aornota.Ubersweep.Tests.Server.Persistence
 
+open Aornota.Ubersweep.Server.Entities
 open Aornota.Ubersweep.Server.Persistence
-open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain.Entities
+open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Tests.Server.Common
 
 open Expecto
@@ -12,7 +12,7 @@ open System
 [<RequireQualifiedAccess>]
 module FileReaderAndWriterTests =
     let private initializeAndApply
-        (guid, initEventAndAuditUserId, eventsAndAuditUserIds, testDir: TestPersistenceDirectory<Counter>)
+        (guid, initEventAndAuditUserId, eventsAndAuditUserIds, testDir: TestPersistenceDirectory<CounterId, Counter>)
         =
         asyncResult {
             let rec apply eventsAndAuditUserIds counter = asyncResult {
@@ -35,7 +35,7 @@ module FileReaderAndWriterTests =
     let private happy =
         testList "happy" [
             testAsync "Read (initial event entry) with no partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -63,7 +63,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read (multiple event entries) with partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(Some "2026", None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -96,7 +96,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read (multiple entries with snapshot) with no partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, Some 3u)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, Some 3u)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -130,7 +130,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all (no files) with partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(Some "2026", None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", None)
 
                 let! result = asyncResult { return! testDir.ReadAllAsync() }
 
@@ -139,7 +139,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all (initial event entry) with no partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -171,7 +171,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all (multiple event entries; multiple entries with snapshot) with partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(Some "2026", Some 3u)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", Some 3u)
                 let guid1 = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guid2 = Guid.NewGuid()
 
@@ -229,7 +229,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write (initial event entry) with no partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -249,7 +249,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write (multiple event entries) with partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(Some "2026", None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -274,7 +274,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write (initial event entry; multiple entries with snapshot) with no partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, Some 3u)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, Some 3u)
                 let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -317,7 +317,7 @@ module FileReaderAndWriterTests =
     let private sad =
         testList "sad" [
             testAsync "Read when file does not exist" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult { return! testDir.ReadAsync guid }
@@ -331,7 +331,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when file exists but is empty" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -348,7 +348,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when at least one entry caused a deserialization error" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -372,7 +372,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when event revision inconsistent with previous entry revision" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -397,7 +397,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when snapshot revision not equal to previous event revision" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -422,7 +422,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when snapshot but previous entry was snapshot" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -448,7 +448,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when snapshot but no previous entry" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -470,7 +470,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read all when at least one file with non-Guid name exists" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let name = "rogue"
 
                 let! result = asyncResult {
@@ -490,7 +490,7 @@ module FileReaderAndWriterTests =
             }
             testAsync "Read all when error creating directory" {
                 use testDir =
-                    new TestPersistenceDirectory<Counter>(Some @"par|tition", None, skipCreatingDir = true)
+                    new TestPersistenceDirectory<CounterId, Counter>(Some @"par|tition", None, skipCreatingDir = true)
 
                 let! result = asyncResult { return! testDir.ReadAllAsync() }
 
@@ -505,7 +505,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when empty file exists" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -543,7 +543,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists for which at least one entry caused a deserialization error" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -588,7 +588,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists with event revision inconsistent with previous entry revision" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -633,7 +633,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists with snapshot revision not equal to previous event revision" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -679,7 +679,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists with snapshot but previous entry was snapshot" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -726,7 +726,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists with snapshot but no previous entry" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -769,7 +769,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write initial revision when file already exists" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -788,7 +788,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Write non-initial revision when file does not exist" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -804,7 +804,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Write non-initial revision when file exists but is empty" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -822,7 +822,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Write when revision inconsistent with previous entry revision" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -846,7 +846,7 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Write when deserialization error for last entry" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -867,7 +867,7 @@ module FileReaderAndWriterTests =
                 | Error error ->
                     Expect.equal
                         error
-                        $"Deserialization error for last entry when writing {Rvn 3u} for {guid} in {testDir.PathForError}: Error at: `$[1]`\010The following `failure` occurred with the decoder: Cannot find case Revision in Aornota.Ubersweep.Shared.Rvn"
+                        $"Deserialization error for last entry when writing {Rvn 3u} for {guid} in {testDir.PathForError}: Error at: `$[1]`\010The following `failure` occurred with the decoder: Cannot find case Revision in Aornota.Ubersweep.Shared.Common.Rvn"
                         $"{nameof Error} is not the expected error"
             }
         ]
@@ -875,7 +875,7 @@ module FileReaderAndWriterTests =
     let private integration =
         testList "integration" [
             testAsync "Write multiple entities (without snapshots) and read (separately) with no partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(None, None)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
 
                 let! result = asyncResult {
                     let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
@@ -940,7 +940,7 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write multiple entities (with snapshots) and read (all) with partition" {
-                use testDir = new TestPersistenceDirectory<Counter>(Some "2026", Some 3u)
+                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", Some 3u)
 
                 let! result = asyncResult {
                     let guid1 = Guid.Empty // use empty Guid to ensure deterministic ordering of result

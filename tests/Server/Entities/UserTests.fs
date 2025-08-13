@@ -1,8 +1,8 @@
 namespace Aornota.Ubersweep.Tests.Server.Entities
 
+open Aornota.Ubersweep.Shared.Entities
 open Aornota.Ubersweep.Server.Entities
-open Aornota.Ubersweep.Shared
-open Aornota.Ubersweep.Shared.Domain.Entities
+open Aornota.Ubersweep.Shared.Common
 
 open Expecto
 open FsToolkit.ErrorHandling
@@ -17,7 +17,7 @@ module UserTests =
                 let guid, userName, userType = Guid.NewGuid(), "admin", Administrator
 
                 let user, initEvent =
-                    User.initializeFromCommand (guid, Create(userName, "password", userType))
+                    User.initializeFromCommand (guid, CreateUser(userName, "password", userType))
 
                 Expect.equal user.Id.Guid guid $"Id.Guid for {user} should equal {guid}"
 
@@ -40,7 +40,7 @@ module UserTests =
                 let guid = Guid.NewGuid()
 
                 let userFromCommand, initEvent =
-                    User.initializeFromCommand (guid, Create("pleb", "password", Pleb))
+                    User.initializeFromCommand (guid, CreateUser("pleb", "password", Pleb))
 
                 let userFromEvent = User.eventHelper.InitializeFromEvent(guid, initEvent)
 
@@ -49,7 +49,9 @@ module UserTests =
             test "Change user type" {
                 let guid, newUserType = Guid.NewGuid(), PersonaNonGrata
 
-                let user, _ = User.initializeFromCommand (guid, Create("pleb", "password", Pleb))
+                let user, _ =
+                    User.initializeFromCommand (guid, CreateUser("pleb", "password", Pleb))
+
                 let rvn, initialState = user.Rvn, user.State
 
                 let result = result {
