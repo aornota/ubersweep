@@ -5,6 +5,7 @@
 .fable/
 bin/
 deploy/
+logs/
 node_modules/
 obj/
 output/
@@ -12,3 +13,4 @@ packages/
 paket-files/
 persisted/
 secret/
+appsettings.development*.json

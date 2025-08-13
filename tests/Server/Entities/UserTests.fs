@@ -11,6 +11,7 @@ open System
 [<RequireQualifiedAccess>]
 module UserTests =
     let private happy =
+        // TODO: Review these...
         testList "happy" [
             test "Initialize from command" {
                 let guid, userName, userType = Guid.NewGuid(), "admin", Administrator

@@ -1,5 +1,5 @@
 {
-    "editor.fontSize": 13,
+    "editor.fontSize": 12,
     "tailwindCSS.includeLanguages": {
         "fsharp": "html"
     },
@@ -17,6 +17,7 @@
         "**/bin": true,
         "**/deploy": true,
         "**/LICENSE": true,
+        "**/logs": true,
         "**/node_modules": true,
         "**/obj": true,
         "**/output": true,

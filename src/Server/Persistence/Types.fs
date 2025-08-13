@@ -16,8 +16,8 @@ type Entry =
 
 type GetSnapshot = unit -> Json
 
-type PartitionKey = string
-type EntityKey = string
+type PartitionName = string
+type EntityName = string
 
 type IReader =
     abstract ReadAsync: Guid -> Async<Result<NonEmptyList<Entry>, string>>
@@ -34,5 +34,6 @@ type PersistenceClock() =
         member _.GetUtcNow() = DateTime.UtcNow
 
 type IPersistenceFactory =
-    abstract GetReader: PartitionKey option * EntityKey -> IReader
-    abstract GetWriter: PartitionKey option * EntityKey -> IWriter
+    abstract GetReader<'a> : PartitionName option -> IReader
+
+    abstract GetWriter<'a> : PartitionName option -> IWriter

@@ -2,13 +2,20 @@ source https://api.nuget.org/v3/index.json
 framework: net8.0
 storage: none
 
+nuget Elmish.Bridge.Giraffe
 nuget Expecto ~> 9
 nuget FsToolkit.ErrorHandling
+nuget Giraffe.SerilogExtensions
+nuget jose-jwt
 nuget SAFE.Server ~> 5
 nuget SAFE.Client ~> 5
 
 nuget Fake.Core.Target ~> 5
 nuget Fake.IO.FileSystem ~> 5
 nuget Farmer ~> 1
+nuget Serilog.Extensions.Logging
+nuget Serilog.Settings.Configuration
+nuget Serilog.Sinks.Console
+nuget Serilog.Sinks.File
 nuget Thoth.Json
 nuget Thoth.Json.Net

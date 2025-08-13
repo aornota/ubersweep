@@ -1,10 +1,12 @@
 namespace Aornota.Ubersweep.Server.Persistence
 
+open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared
 open Aornota.Ubersweep.Shared.Domain.Entities
 
 open FsToolkit.ErrorHandling
+open Serilog
 open System
 open System.IO
 
@@ -23,20 +25,33 @@ type private Input =
 type FileReaderAndWriter
     (
         root: string,
-        partitionKey: PartitionKey option,
-        entityKey: EntityKey,
+        partitionName: PartitionName option,
+        entityName: EntityName,
         snapshotFrequency: uint option,
-        clock: IPersistenceClock
+        clock: IPersistenceClock,
+        logger: ILogger
     ) =
     [<Literal>]
     static let fileExtension = "entries"
 
     let subPath =
-        match partitionKey with
-        | Some partitionKey -> Path.Combine(partitionKey, entityKey)
-        | None -> entityKey
+        match partitionName with
+        | Some partitionName -> Path.Combine(partitionName, entityName)
+        | None -> entityName
+
+    let logger = SourcedLogger.Create<FileReaderAndWriter>(subPath, logger)
 
     let path = Path.Combine(root, subPath)
+
+    do
+        logger.Information("Using path: {path}", DirectoryInfo(path).FullName)
+
+        let description =
+            match snapshotFrequency with
+            | Some snapshotFrequency -> $"every {int snapshotFrequency} revisions"
+            | None -> "no snapshotting"
+
+        logger.Verbose("Using snapshot frequency: {description}", description)
 
     let pathForError = $"...\{DirectoryInfo(root).Name}\{subPath}"
 
@@ -204,25 +219,54 @@ type FileReaderAndWriter
 
     let agent =
         MailboxProcessor.Start(fun inbox ->
+            // TODO: Abstract the logging somehow?...
+            let readInput, readAllInput, writeInput = nameof Read, nameof ReadAll, nameof Write
+
             let rec loop () = async {
                 match! inbox.Receive() with
                 | Read(guid, reply) ->
+                    logger.Verbose("{input} ({guid})...", readInput, guid)
+
                     let! result = tryRead guid
+
+                    match result with
+                    | Ok nonEmptyList -> logger.Verbose("...{length} read", nonEmptyList.List.Length)
+                    | Error error -> logger.Error $"...{error}"
+
                     reply.Reply result
                     return! loop ()
                 | ReadAll reply ->
+                    logger.Verbose("{input}...", readAllInput)
+
                     let! result = tryReadAll ()
+
+                    logger.Verbose("...{length} read", result.Length)
+
                     reply.Reply(result |> List.ofArray)
                     return! loop ()
                 | Write(guid, rvn, auditUserId, eventJson, getSnapsot, reply) ->
+                    logger.Verbose(
+                        "{input} ({guid} | {rvn} | {eventJson} | {auditUserId})...",
+                        writeInput,
+                        guid,
+                        rvn,
+                        eventJson,
+                        auditUserId
+                    )
+
                     let! result = tryWrite (guid, rvn, auditUserId, eventJson, getSnapsot)
+
+                    match result with
+                    | Ok _ -> logger.Verbose "...written"
+                    | Error error -> logger.Error $"...{error}"
+
                     reply.Reply result
                     return! loop ()
             }
 
             loop ())
 
-    // TODO: Log unhandled errors (via agent.Error.Add)...
+    do agent.Error.Add(fun exn -> logger.Error("Unexpected error: {message} at {target}", exn.Message, exn.TargetSite))
 
     static member FileExtension = fileExtension
 

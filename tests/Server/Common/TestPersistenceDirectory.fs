@@ -4,23 +4,24 @@ open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Domain.Entities
 
 open FsToolkit.ErrorHandling
+open Serilog
 open System
 open System.IO
 
 type TestPersistenceDirectory<'entity when 'entity :> IEntity and 'entity: equality>
-    (partitionKey: PartitionKey option, snapshotFrequency: uint option, ?retainOnDispose, ?skipCreatingDir) =
+    (partitionName: PartitionName option, snapshotFrequency: uint option, ?retainOnDispose, ?skipCreatingDir) =
     let retainOnDispose = defaultArg retainOnDispose false
     let skipCreatingDir = defaultArg skipCreatingDir false
 
     let root =
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Guid.NewGuid().ToString())
 
-    let entityKey: EntityKey = typeof<'entity>.Name
+    let entityName: EntityName = typeof<'entity>.Name
 
     let subPath =
-        match partitionKey with
-        | Some partitionKey -> Path.Combine(partitionKey, entityKey)
-        | None -> entityKey
+        match partitionName with
+        | Some partitionName -> Path.Combine(partitionName, entityName)
+        | None -> entityName
 
     let path = Path.Combine(root, subPath)
 
@@ -33,7 +34,7 @@ type TestPersistenceDirectory<'entity when 'entity :> IEntity and 'entity: equal
             dir.Create()
 
     let agent =
-        new FileReaderAndWriter(root, partitionKey, entityKey, snapshotFrequency, FixedClock.instance)
+        new FileReaderAndWriter(root, partitionName, entityName, snapshotFrequency, FixedClock.instance, Log.Logger)
 
     let reader, writer = agent :> IReader, agent :> IWriter
 

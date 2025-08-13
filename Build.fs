@@ -5,6 +5,8 @@ open Farmer.Builders
 
 open Helpers
 
+// TODO: Add support for copying appsettings.production.json as appsettings.development.json if the latter does not exist?...
+
 initializeContext ()
 
 let sharedPath = Path.getFullName "src/Shared"
@@ -44,9 +46,7 @@ Target.create "Azure" (fun _ ->
 
     deployment |> Deploy.execute "SAFE-App" Deploy.NoParameters |> ignore)
 
-Target.create "Build" (fun _ -> run dotnet [ "build"; "ubersweep.sln" ] "."
-
-)
+Target.create "Build" (fun _ -> run dotnet [ "build"; "ubersweep.sln" ] ".")
 
 Target.create "Run" (fun _ ->
     [
@@ -70,7 +70,9 @@ Target.create "WatchRunTests" (fun _ ->
 
 Target.create "Format" (fun _ -> run dotnet [ "fantomas"; "." ] ".")
 
-Target.create "RunServerTests" (fun _ -> run dotnet [ "run" ] serverTestsPath)
+Target.create "RunServerTests" (fun _ -> run dotnet [ "run" ] serverTestsPath) // TEMP
+
+Target.create "WatchServer" (fun _ -> run dotnet [ "watch"; "run"; "--no-restore" ] serverPath) // TEMP
 
 open Fake.Core.TargetOperators
 

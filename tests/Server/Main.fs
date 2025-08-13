@@ -4,6 +4,7 @@ open Aornota.Ubersweep.Tests.Server.Entities
 open Aornota.Ubersweep.Tests.Server.Persistence
 
 open Expecto
+open Serilog
 
 module Main =
     let tests =
@@ -14,4 +15,13 @@ module Main =
         ]
 
     [<EntryPoint>]
-    let main _ = runTestsWithCLIArgs [] [||] tests
+    let main _ =
+        (* TODO: Decide if logging is useful - and how best to configure it if so...
+        Log.Logger <-
+            LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.Console()
+                .CreateLogger()
+        *)
+
+        runTestsWithCLIArgs [] [||] tests

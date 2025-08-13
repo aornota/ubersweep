@@ -13,13 +13,15 @@
   <ItemGroup>
     <None Include="paket.references" />
     <Compile Include="Common\Common.fs" />
+    <Compile Include="Common\SourcedLogger.fs" />
     <Compile Include="Persistence\Types.fs" />
     <Compile Include="Persistence\FileReaderAndWriter.fs" />
     <Compile Include="Persistence\FilePersistenceFactory.fs" />
     <Compile Include="Persistence\EntityEventHelper.fs" />
     <Compile Include="Entities\User.fs" />
     <Compile Include="TEMP-Storage.fs" />
-    <Compile Include="Main.fs" />
+    <Compile Include="Startup.fs" />
+    <Compile Include="Host.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Shared\Shared.fsproj" />

@@ -1,2 +1,10 @@
 SAFE.Server
 FsToolkit.ErrorHandling
+Giraffe.SerilogExtensions
+Serilog
+Serilog.Extensions.Logging
+Serilog.Settings.Configuration
+Serilog.Sinks.Console
+Serilog.Sinks.File
+jose-jwt
+Elmish.Bridge.Giraffe
