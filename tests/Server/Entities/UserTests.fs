@@ -1,7 +1,7 @@
 namespace Aornota.Ubersweep.Tests.Server.Entities
 
-open Aornota.Ubersweep.Shared.Entities
 open Aornota.Ubersweep.Server.Entities
+open Aornota.Ubersweep.Shared.Entities
 open Aornota.Ubersweep.Shared.Common
 
 open Expecto
@@ -17,22 +17,22 @@ module UserTests =
                 let guid, userName, userType = Guid.NewGuid(), "admin", Administrator
 
                 let user, initEvent =
-                    User.initializeFromCommand (guid, CreateUser(userName, "password", userType))
+                    User.helper.InitFromCommand(guid, CreateUser(userName, "password", userType))
 
-                Expect.equal user.Id.Guid guid $"Id.Guid for {user} should equal {guid}"
+                Expect.equal user.Guid guid $"Id.Guid for {user} should equal {guid}"
 
                 Expect.equal user.Rvn Rvn.InitialRvn $"Rvn for {user} should equal {Rvn.InitialRvn}"
 
-                Expect.equal user.State.UserName userName $"UserName for {user} should equal {userName}"
+                Expect.equal user.State.UserCommon.UserName userName $"UserName for {user} should equal {userName}"
 
-                Expect.equal user.State.UserType userType $"UserType for {user} should equal {userType}"
+                Expect.equal user.State.UserCommon.UserType userType $"UserType for {user} should equal {userType}"
 
                 // Cannot check specific Password[Salt|Hash] as these are non-deterministic.
 
                 let expectedMustChangePasswordReason = Some FirstSignIn
 
                 Expect.equal
-                    user.State.MustChangePasswordReason
+                    user.State.UserCommon.MustChangePasswordReason
                     expectedMustChangePasswordReason
                     $"MustChangePasswordReason for {user} should equal {expectedMustChangePasswordReason}"
             }
@@ -40,9 +40,9 @@ module UserTests =
                 let guid = Guid.NewGuid()
 
                 let userFromCommand, initEvent =
-                    User.initializeFromCommand (guid, CreateUser("pleb", "password", Pleb))
+                    User.helper.InitFromCommand(guid, CreateUser("pleb", "password", Pleb))
 
-                let userFromEvent = User.eventHelper.InitializeFromEvent(guid, initEvent)
+                let userFromEvent = User.helper.InitFromEvent(guid, initEvent)
 
                 Expect.equal userFromEvent userFromCommand $"{userFromEvent} should equal {userFromCommand}"
             }
@@ -50,7 +50,7 @@ module UserTests =
                 let guid, newUserType = Guid.NewGuid(), PersonaNonGrata
 
                 let user, _ =
-                    User.initializeFromCommand (guid, CreateUser("pleb", "password", Pleb))
+                    User.helper.InitFromCommand(guid, CreateUser("pleb", "password", Pleb))
 
                 let rvn, initialState = user.Rvn, user.State
 
@@ -61,13 +61,17 @@ module UserTests =
 
                 match result with
                 | Ok user ->
-                    Expect.equal user.Id.Guid guid $"Id.Guid for {user} should equal {guid}"
+                    Expect.equal user.Guid guid $"Id.Guid for {user} should equal {guid}"
                     Expect.equal user.Rvn rvn.NextRvn $"Rvn for {user} should equal {rvn.NextRvn}"
-                    Expect.equal user.State.UserType newUserType $"State.UserType for {user} should equal {newUserType}"
 
                     Expect.equal
-                        user.State.UserName
-                        initialState.UserName
+                        user.State.UserCommon.UserType
+                        newUserType
+                        $"State.UserType for {user} should equal {newUserType}"
+
+                    Expect.equal
+                        user.State.UserCommon.UserName
+                        initialState.UserCommon.UserName
                         $"State.UserName should be equal for {user} and {initialState}"
 
                     Expect.equal
@@ -81,8 +85,8 @@ module UserTests =
                         $"State.PasswordHash should be equal for {user} and {initialState}"
 
                     Expect.equal
-                        user.State.MustChangePasswordReason
-                        initialState.MustChangePasswordReason
+                        user.State.UserCommon.MustChangePasswordReason
+                        initialState.UserCommon.MustChangePasswordReason
                         $"State.MustChangePasswordReason should be equal for {user} and {initialState}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }

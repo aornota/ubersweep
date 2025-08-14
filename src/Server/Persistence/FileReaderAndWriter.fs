@@ -16,8 +16,8 @@ type private Input =
     | Write of
         guid: Guid *
         rvn: Rvn *
-        auditUserId: EntityId<UserId> *
-        eventJson: Json *
+        auditUserId: UserId *
+        eventJson: IEvent *
         getSnapsot: GetSnapshot *
         reply: AsyncReplyChannel<Result<unit, string>>
 
@@ -166,7 +166,7 @@ type FileReaderAndWriter
             return [| Error $"Unexpected error reading all for {pathForError}: {exn.Message}" |]
     }
 
-    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: EntityId<UserId>, eventJson: Json, getSnapshot) = asyncResult {
+    let tryWrite (guid: Guid, rvn: Rvn, auditUserId: UserId, event: IEvent, getSnapshot) = asyncResult {
         try
             let guid = guid.ToString() // intentionally shadow as only need string representation
             let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))
@@ -177,7 +177,9 @@ type FileReaderAndWriter
             | false, false ->
                 return! Error $"File does not exist when writing non-initial {rvn} for {guid} in {pathForError}"
             | true, false ->
-                let (Json eventJson') = Json.toJson (EventJson(rvn, utcNow, auditUserId, eventJson))
+                let (Json eventJson') =
+                    Json.toJson (EventJson(rvn, utcNow, auditUserId, event.EventJson))
+
                 do! File.WriteAllLinesAsync(file.FullName, [| eventJson' |])
                 return! Ok()
             | false, true ->
@@ -189,7 +191,9 @@ type FileReaderAndWriter
                     match Json.fromJson<Entry> (Json lastLine) with
                     | Ok entry ->
                         if rvn.IsValidNextRvn(Some entry.Rvn) then
-                            let (Json eventJson') = Json.toJson (EventJson(rvn, utcNow, auditUserId, eventJson))
+                            let (Json eventJson') =
+                                Json.toJson (EventJson(rvn, utcNow, auditUserId, event.EventJson))
+
                             let (Rvn rvn') = rvn
 
                             let lines =
@@ -243,17 +247,17 @@ type FileReaderAndWriter
 
                     reply.Reply(result |> List.ofArray)
                     return! loop ()
-                | Write(guid, rvn, auditUserId, eventJson, getSnapsot, reply) ->
+                | Write(guid, rvn, auditUserId, event, getSnapsot, reply) ->
                     logger.Verbose(
-                        "{input} ({guid} | {rvn} | {eventJson} | {auditUserId})...",
+                        "{input} ({guid} | {rvn} | {event} | {auditUserId})...",
                         writeInput,
                         guid,
                         rvn,
-                        eventJson,
+                        event,
                         auditUserId
                     )
 
-                    let! result = tryWrite (guid, rvn, auditUserId, eventJson, getSnapsot)
+                    let! result = tryWrite (guid, rvn, auditUserId, event, getSnapsot)
 
                     match result with
                     | Ok _ -> logger.Verbose "...written"
@@ -277,10 +281,10 @@ type FileReaderAndWriter
             agent.PostAndAsyncReply(fun reply -> ReadAll reply)
 
     interface IWriter with
-        member _.WriteAsync(guid, rvn, auditUserId, eventJson, getSnapshot) =
-            agent.PostAndAsyncReply(fun reply -> Write(guid, rvn, auditUserId, eventJson, getSnapshot, reply))
+        member _.WriteAsync(guid, rvn, auditUserId, event, getSnapshot) =
+            agent.PostAndAsyncReply(fun reply -> Write(guid, rvn, auditUserId, event, getSnapshot, reply))
 
     interface IDisposable with
         member _.Dispose() =
             agent.Dispose()
-            logger.Information "Disposed"
+            logger.Warning "Disposed"

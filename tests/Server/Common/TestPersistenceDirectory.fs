@@ -1,7 +1,9 @@
 namespace Aornota.Ubersweep.Tests.Server.Common
 
+open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Entities
 open Aornota.Ubersweep.Server.Persistence
+open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
@@ -9,7 +11,8 @@ open Serilog
 open System
 open System.IO
 
-type TestPersistenceDirectory<'id, 'entity when 'id :> IId and 'entity :> IEntity and 'entity: equality>
+type TestPersistenceDirectory<'id, 'state, 'initEvent, 'event
+    when 'id :> IId and 'state :> IState<'state, 'event> and 'initEvent :> IEvent and 'event :> IEvent>
     (partitionName: PartitionName option, snapshotFrequency: uint option, ?retainOnDispose, ?skipCreatingDir) =
     let retainOnDispose = defaultArg retainOnDispose false
     let skipCreatingDir = defaultArg skipCreatingDir false
@@ -17,7 +20,7 @@ type TestPersistenceDirectory<'id, 'entity when 'id :> IId and 'entity :> IEntit
     let root =
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Guid.NewGuid().ToString())
 
-    let entityName: EntityName = typeof<'entity>.Name
+    let entityName: EntityName = typeof<'state>.Name
 
     let subPath =
         match partitionName with
@@ -44,15 +47,17 @@ type TestPersistenceDirectory<'id, 'entity when 'id :> IId and 'entity :> IEntit
     member _.ReadAsync guid = reader.ReadAsync guid
     member _.ReadAllAsync() = reader.ReadAllAsync()
 
-    member _.WriteAsync<'event when 'event :> IEvent>
-        (entity: Entity<'id, 'entity>, event: 'event, auditUserId: EntityId<UserId>)
-        =
-        writer.WriteAsync(entity.Id.Guid, entity.Rvn, auditUserId, event.EventJson, (fun _ -> entity.SnapshotJson))
+    member _.WriteAsync(entity: Entity<'id, 'state, 'event>, event: 'initEvent, auditUserId: UserId) =
+        writer.WriteAsync(entity.Id.Guid, entity.Rvn, auditUserId, event, (fun _ -> entity.SnapshotJson))
 
-    member _.WriteAsync<'event when 'event :> IEvent>
-        (guid, rvn, event: 'event, auditUserId: EntityId<UserId>, snapshotJson)
-        =
-        writer.WriteAsync(guid, rvn, auditUserId, event.EventJson, (fun _ -> snapshotJson))
+    member _.WriteAsync(entity: Entity<'id, 'state, 'event>, event: 'event, auditUserId: UserId) =
+        writer.WriteAsync(entity.Id.Guid, entity.Rvn, auditUserId, event, (fun _ -> entity.SnapshotJson))
+
+    member _.WriteAsync(guid, rvn, event: 'initEvent, auditUserId: UserId, snapshotJson) =
+        writer.WriteAsync(guid, rvn, auditUserId, event, (fun _ -> snapshotJson))
+
+    member _.WriteAsync(guid, rvn, event: 'event, auditUserId: UserId, snapshotJson) =
+        writer.WriteAsync(guid, rvn, auditUserId, event, (fun _ -> snapshotJson))
 
     member _.TryReadAllLinesAsync(guid: Guid) = asyncResult {
         try

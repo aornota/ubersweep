@@ -1,5 +1,6 @@
 namespace Aornota.Ubersweep.Tests.Server.Persistence
 
+open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Entities
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Common
@@ -12,11 +13,15 @@ open System
 [<RequireQualifiedAccess>]
 module FileReaderAndWriterTests =
     let private initializeAndApply
-        (guid, initEventAndAuditUserId, eventsAndAuditUserIds, testDir: TestPersistenceDirectory<CounterId, Counter>)
-        =
+        (
+            guid,
+            initCommandPair,
+            commandsPairs,
+            testDir: TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>
+        ) =
         asyncResult {
-            let rec apply eventsAndAuditUserIds counter = asyncResult {
-                match eventsAndAuditUserIds with
+            let rec apply commandsPairs counter = asyncResult {
+                match commandsPairs with
                 | (event, auditUserId) :: t ->
                     let! counter, event = counter |> Counter.apply event
                     let! _ = testDir.WriteAsync(counter, event, auditUserId)
@@ -24,18 +29,19 @@ module FileReaderAndWriterTests =
                 | [] -> return counter
             }
 
-            let counter, event =
-                Counter.initializeFromCommand (guid, fst initEventAndAuditUserId)
+            let counter, initEvent = Counter.helper.InitFromCommand(guid, fst initCommandPair)
 
-            let! _ = testDir.WriteAsync(counter, event, snd initEventAndAuditUserId)
+            let! _ = testDir.WriteAsync(counter, initEvent, snd initCommandPair)
 
-            return! apply eventsAndAuditUserIds counter
+            return! apply commandsPairs counter
         }
 
     let private happy =
         testList "happy" [
             testAsync "Read (initial event entry) with no partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -43,7 +49,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -63,7 +69,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read (multiple event entries) with partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -71,9 +79,9 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","\"Incremented\""]]"""
-                                $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser2Id.Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -96,7 +104,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read (multiple entries with snapshot) with no partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, Some 3u)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, Some 3u)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -104,11 +114,11 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","\"Incremented\""]]"""
-                                $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser2Id.Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                                 """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
-                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -120,7 +130,7 @@ module FileReaderAndWriterTests =
                     let expectedNonEmptyList =
                         NonEmptyList<Entry>
                             .Create(
-                                SnapshotJson(Rvn 3u, ({ Count = 1 } :> IEntity).SnapshotJson),
+                                SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                 [
                                     EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
                                 ]
@@ -130,7 +140,8 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all (no files) with partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
 
                 let! result = asyncResult { return! testDir.ReadAllAsync() }
 
@@ -139,7 +150,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all (initial event entry) with no partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -147,7 +160,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -171,7 +184,12 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all (multiple event entries; multiple entries with snapshot) with partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", Some 3u)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        Some "2026",
+                        Some 3u
+                    )
+
                 let guid1 = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guid2 = Guid.NewGuid()
 
@@ -180,8 +198,8 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid1,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -189,11 +207,11 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid2,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","\"Incremented\""]]"""
-                                $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser2Id.Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                                 """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
-                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -217,7 +235,7 @@ module FileReaderAndWriterTests =
                             guid2,
                             NonEmptyList<Entry>
                                 .Create(
-                                    SnapshotJson(Rvn 3u, ({ Count = 1 } :> IEntity).SnapshotJson),
+                                    SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                     [
                                         EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
                                     ]
@@ -229,7 +247,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write (initial event entry) with no partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -242,14 +262,16 @@ module FileReaderAndWriterTests =
                 match result with
                 | Ok lines ->
                     let expectedLines = [
-                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                     ]
 
                     Expect.equal lines expectedLines $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write (multiple event entries) with partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -265,16 +287,18 @@ module FileReaderAndWriterTests =
                 match result with
                 | Ok lines ->
                     let expectedLines = [
-                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                        $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","\"Incremented\""]]"""
-                        $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser2Id.Guid}"],["Json","\"Incremented\""]]"""
+                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                        $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                        $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                     ]
 
                     Expect.equal lines expectedLines $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write (initial event entry; multiple entries with snapshot) with no partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, Some 3u)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, Some 3u)
+
                 let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -297,15 +321,15 @@ module FileReaderAndWriterTests =
                 match result with
                 | Ok(lines1, lines2) ->
                     let expectedLines1 = [
-                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                     ]
 
                     let expectedLines2 = [
-                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                        $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","\"Incremented\""]]"""
-                        $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser2Id.Guid}"],["Json","\"Incremented\""]]"""
+                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                        $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                        $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                         """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
-                        $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","\"Incremented\""]]"""
+                        $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                     ]
 
                     Expect.equal lines1 expectedLines1 $"Unexpected {nameof fst} {nameof Ok} {nameof result}"
@@ -317,7 +341,9 @@ module FileReaderAndWriterTests =
     let private sad =
         testList "sad" [
             testAsync "Read when file does not exist" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult { return! testDir.ReadAsync guid }
@@ -331,7 +357,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when file exists but is empty" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -348,7 +376,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when at least one entry caused a deserialization error" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -356,7 +386,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJason",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]""" // 'EventJason' should cause a deserialization error
+                                """["EventJason",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]""" // 'EventJason' should cause a deserialization error
                             ]
                         )
 
@@ -372,7 +402,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when event revision inconsistent with previous entry revision" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -380,8 +412,8 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
-                                """["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","\"Incremented\""]]"""
+                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -397,7 +429,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when snapshot revision not equal to previous event revision" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -405,7 +439,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
                                 """["SnapshotJson",["Rvn",2],["Json","{\"Count\":-1}"]]"""
                             ]
                         )
@@ -422,7 +456,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when snapshot but previous entry was snapshot" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -430,7 +466,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
                                 """["SnapshotJson",["Rvn",1],["Json","{\"Count\":-1}"]]"""
                                 """["SnapshotJson",["Rvn",1],["Json","{\"Count\":-1}"]]"""
                             ]
@@ -448,7 +484,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when snapshot but no previous entry" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -470,7 +508,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read all when at least one file with non-Guid name exists" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let name = "rogue"
 
                 let! result = asyncResult {
@@ -490,7 +530,11 @@ module FileReaderAndWriterTests =
             }
             testAsync "Read all when error creating directory" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter>(Some @"par|tition", None, skipCreatingDir = true)
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        Some @"par|tition",
+                        None,
+                        skipCreatingDir = true
+                    )
 
                 let! result = asyncResult { return! testDir.ReadAllAsync() }
 
@@ -505,7 +549,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when empty file exists" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -516,7 +562,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -543,7 +589,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists for which at least one entry caused a deserialization error" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -554,7 +602,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -562,7 +610,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidError,
                             [
-                                """["EventJason",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]""" // 'EventJason' should cause a deserialization error
+                                """["EventJason",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]""" // 'EventJason' should cause a deserialization error
                             ]
                         )
 
@@ -588,7 +636,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists with event revision inconsistent with previous entry revision" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -599,7 +649,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -607,7 +657,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidError,
                             [
-                                """["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -633,7 +683,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists with snapshot revision not equal to previous event revision" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -644,7 +696,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -652,7 +704,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidError,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
                                 """["SnapshotJson",["Rvn",2],["Json","{\"Count\":-1}"]]"""
                             ]
                         )
@@ -679,7 +731,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists with snapshot but previous entry was snapshot" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -690,7 +744,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -698,7 +752,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidError,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
                                 """["SnapshotJson",["Rvn",1],["Json","{\"Count\":-1}"]]"""
                                 """["SnapshotJson",["Rvn",1],["Json","{\"Count\":-1}"]]"""
                             ]
@@ -726,7 +780,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Read all when file exists with snapshot but no previous entry" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
 
@@ -737,7 +793,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","{auditUser1Id.Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -769,7 +825,9 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write initial revision when file already exists" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -788,7 +846,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Write non-initial revision when file does not exist" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -804,7 +864,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Write non-initial revision when file exists but is empty" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -822,7 +884,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Write when revision inconsistent with previous entry revision" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -830,7 +894,7 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -846,7 +910,9 @@ module FileReaderAndWriterTests =
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Write when deserialization error for last entry" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
@@ -854,8 +920,8 @@ module FileReaderAndWriterTests =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJason",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]""" // 'EventJason' irrelevant as only the last entry will be deserialized
-                                """["EventJson",["Revision",2],"2025-08-07T15:11:33.0000000Z",["Id","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","\"Incremented\""]]""" // 'Revision' should cause a deserialization error
+                                """["EventJason",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]""" // 'EventJason' irrelevant as only the last entry will be deserialized
+                                """["EventJson",["Revision",2],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","\"Incremented\""]]""" // 'Revision' should cause a deserialization error
                             ]
                         )
 
@@ -875,7 +941,8 @@ module FileReaderAndWriterTests =
     let private integration =
         testList "integration" [
             testAsync "Write multiple entities (without snapshots) and read (separately) with no partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(None, None)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let! result = asyncResult {
                     let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
@@ -897,7 +964,7 @@ module FileReaderAndWriterTests =
                         )
 
                     let! entries1 = testDir.ReadAsync guid1
-                    let! actual1 = Counter.eventHelper.FromEntries(guid1, entries1)
+                    let! actual1 = Counter.helper.FromEntries(guid1, entries1)
 
                     let! expected2 =
                         initializeAndApply (
@@ -916,7 +983,7 @@ module FileReaderAndWriterTests =
                         )
 
                     let! entries2 = testDir.ReadAsync guid2
-                    let! actual2 = Counter.eventHelper.FromEntries(guid2, entries2)
+                    let! actual2 = Counter.helper.FromEntries(guid2, entries2)
 
                     return actual1, expected1, actual2, expected2
                 }
@@ -940,7 +1007,11 @@ module FileReaderAndWriterTests =
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write multiple entities (with snapshots) and read (all) with partition" {
-                use testDir = new TestPersistenceDirectory<CounterId, Counter>(Some "2026", Some 3u)
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        Some "2026",
+                        Some 3u
+                    )
 
                 let! result = asyncResult {
                     let guid1 = Guid.Empty // use empty Guid to ensure deterministic ordering of result
@@ -987,10 +1058,10 @@ module FileReaderAndWriterTests =
                         | _ -> Error $"Reading all returned an unexpected number ({all.Length}) of results"
 
                     let! guidAndEntries1 = result1
-                    let! actual1 = Counter.eventHelper.FromEntries guidAndEntries1
+                    let! actual1 = Counter.helper.FromEntries guidAndEntries1
 
                     let! guidAndEntries2 = result2
-                    let! actual2 = Counter.eventHelper.FromEntries guidAndEntries2
+                    let! actual2 = Counter.helper.FromEntries guidAndEntries2
 
                     return actual1, expected1, actual2, expected2
                 }

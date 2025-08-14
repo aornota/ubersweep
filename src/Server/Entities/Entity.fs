@@ -1,47 +1,67 @@
 namespace Aornota.Ubersweep.Server.Entities
 
-open Aornota.Ubersweep.Shared.Entities
 open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Server.Common
+open Aornota.Ubersweep.Server.Persistence
 
+open FsToolkit.ErrorHandling
 open System
 
-type IEntity =
-    abstract SnapshotJson: Json
-
-type private EntityInner<'id, 'entity when 'id :> IId and 'entity :> IEntity> = {
-    Id: EntityId<'id>
+type Entity<'id, 'state, 'event when 'id :> IId and 'state :> IState<'state, 'event> and 'event :> IEvent> = {
+    Id: 'id
     Rvn: Rvn
-    State: 'entity
-}
+    State: 'state
+} with
 
-type Entity<'id, 'entity when 'id :> IId and 'entity :> IEntity and 'entity: equality>
-    (id: EntityId<'id>, rvn: Rvn, state: 'entity) =
-    let mutable entity = { Id = id; Rvn = rvn; State = state }
+    member this.Guid = this.Id.Guid
+    member this.SnapshotJson = this.State.SnapshotJson
 
-    override this.Equals other =
-        match other with
-        | :? Entity<'id, 'entity> as other -> this.Equals other
-        | _ -> false
+    member this.Evolve event = {
+        this with
+            Rvn = this.Rvn.NextRvn
+            State = this.State.Evolve event
+    }
 
-    override _.GetHashCode() = entity.GetHashCode()
+[<AbstractClass>]
+type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
+    when 'id :> IId and 'state :> IState<'state, 'event> and 'initEvent :> IEvent and 'event :> IEvent>() =
+    abstract member IdFromGuid: Guid -> 'id
+    abstract member InitFromCommand: Guid * 'initCommand -> Entity<'id, 'state, 'event> * 'initEvent
+    abstract member InitFromEvent: Guid * 'initEvent -> Entity<'id, 'state, 'event>
 
-    member _.Equals(other: Entity<'id, 'entity>) =
-        entity.Id = other.Id && entity.Rvn = other.Rvn && entity.State = other.State
+    member this.FromEntries(guid, entries: NonEmptyList<Entry>) = result {
+        let rec mapToEvents subsequentEntries events =
+            match subsequentEntries with
+            | h :: t ->
+                match h with
+                | EventJson(_, _, _, json) ->
+                    match Json.fromJson<'event> json with
+                    | Ok event -> mapToEvents t (event :: events)
+                    | Error error -> Error error
+                | SnapshotJson _ -> Error $"Subsequent entries contain a {nameof SnapshotJson}"
+            | [] -> Ok(events |> List.rev)
 
-    member _.Id = entity.Id
-    member _.Rvn = entity.Rvn
-    member _.State = entity.State
-    member _.SnapshotJson = Json.toJson entity.State
+        let folder (entity: Entity<'id, 'state, 'event>) event = entity.Evolve event
 
-    member _.Evolve state =
-        entity <- {
-            entity with
-                Rvn = entity.Rvn.NextRvn
-                State = state
-        }
+        let! entityFromFirstEntry, subsequentEntries =
+            match entries.Head with
+            | SnapshotJson(rvn, json) -> result {
+                let! state = Json.fromJson<'state> json
 
-    interface IEquatable<Entity<'id, 'entity>> with
-        member this.Equals other = this.Equals other
+                return
+                    {
+                        Id = this.IdFromGuid guid
+                        Rvn = rvn
+                        State = state
+                    },
+                    entries.Tail
+              }
+            | EventJson(_, _, _, json) -> result {
+                let! initEvent = Json.fromJson<'initEvent> json
+                return this.InitFromEvent(guid, initEvent), entries.Tail
+              }
 
-type IEvent =
-    abstract EventJson: Json
+        let! events = mapToEvents subsequentEntries []
+
+        return events |> List.fold folder entityFromFirstEntry
+    }

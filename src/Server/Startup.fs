@@ -21,12 +21,16 @@ module private Startup =
     let private SuperUserName = "superuser"
 
     [<Literal>]
-    let private SuperUserPassword = "ubersweep"
+    let private SuperUserPasswordSalt = "CHQSX6YO/AM/Tm21txBUwSs5+8FcPFriq8HRKo7yDGA="
+
+    [<Literal>]
+    let private SuperUserPasswordHash =
+        "+eAhZRK85XUDQjEJ4HEwACNgCN607/BbfiWjcRjr4/WIyqGzMVhGlFtO7lhWSB9fwWzi4Nbzf74Kznm25WmSSw=="
 
     let checkUsers (persistenceFactory: IPersistenceFactory, logger: ILogger) = async {
         logger.Information "...checking Users..."
 
-        let reader = persistenceFactory.GetReader<User> None
+        let reader = persistenceFactory.GetReader<User, UserEvent> None
         let! all = reader.ReadAllAsync()
 
         if all.Length > 0 then
@@ -34,7 +38,7 @@ module private Startup =
             |> List.iter (fun result ->
                 match result with
                 | Ok(guid, entries) ->
-                    match User.eventHelper.FromEntries(guid, entries) with
+                    match User.helper.FromEntries(guid, entries) with
                     | Ok _ -> ()
                     | Error error -> logger.Error("...error processing entries for User {guid}: {error}", guid, error)
                 | Error error -> logger.Error("...error reading entries for User: {error}", error))
@@ -43,31 +47,33 @@ module private Startup =
         else
             logger.Information("...creating {type} because no Users exist...", SuperUser)
 
-            let superUser, initEvent =
-                User.initializeFromCommand (Guid.Empty, CreateUser(SuperUserName, SuperUserPassword, SuperUser))
+            let initEvent =
+                UserCreated(SuperUserName, SuperUserPasswordSalt, SuperUserPasswordHash, SuperUser)
 
-            let writer = persistenceFactory.GetWriter<User> None
+            let superUser = User.helper.InitFromEvent(Guid.Empty, initEvent)
+
+            let writer = persistenceFactory.GetWriter<User, UserEvent> None
 
             let! result =
                 writer.WriteAsync(
-                    superUser.Id.Guid,
+                    superUser.Guid,
                     Rvn.InitialRvn,
                     superUser.Id,
-                    (initEvent: IEvent).EventJson,
+                    initEvent,
                     fun _ -> superUser.SnapshotJson
                 )
 
             match result with
             | Ok _ ->
-                match! reader.ReadAsync superUser.Id.Guid with
+                match! reader.ReadAsync superUser.Guid with
                 | Ok entries ->
-                    match User.eventHelper.FromEntries(superUser.Id.Guid, entries) with
+                    match User.helper.FromEntries(superUser.Guid, entries) with
                     | Ok _ -> logger.Information("...{type} created", SuperUser)
                     | Error error ->
                         logger.Error(
                             "...error processing entries for {type} {guid}: {error}",
                             SuperUser,
-                            superUser.Id.Guid,
+                            superUser.Guid,
                             error
                         )
                 | Error error -> logger.Error("...error reading entries for {type}: {error}", SuperUser, error)

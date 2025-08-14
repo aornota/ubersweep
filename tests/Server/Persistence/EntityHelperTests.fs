@@ -1,9 +1,9 @@
 namespace Aornota.Ubersweep.Tests.Server.Persistence
 
+open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Entities
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Common
-open Aornota.Ubersweep.Shared.Entities
 open Aornota.Ubersweep.Tests.Server.Common
 
 open Expecto
@@ -11,7 +11,7 @@ open FsToolkit.ErrorHandling
 open System
 
 [<RequireQualifiedAccess>]
-module EntityEventHelperTests =
+module EntityHelperTests =
     let private happy =
         testList "happy" [
             test "From single event entry" {
@@ -22,7 +22,7 @@ module EntityEventHelperTests =
                     let entries =
                         NonEmptyList<Entry>
                             .Create(
-                                EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized 1 :> IEvent).EventJson),
                                 []
                             )
 
@@ -31,8 +31,11 @@ module EntityEventHelperTests =
 
                 match result with
                 | Ok counter ->
-                    let expectedCounter =
-                        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn.InitialRvn, { Count = -1 })
+                    let expectedCounter = {
+                        Id = CounterId.FromGuid guid
+                        Rvn = Rvn.InitialRvn
+                        State = { Count = 1 }
+                    }
 
                     Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
@@ -57,8 +60,11 @@ module EntityEventHelperTests =
 
                 match result with
                 | Ok counter ->
-                    let expectedCounter =
-                        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn 3u, { Count = 1 })
+                    let expectedCounter = {
+                        Id = CounterId.FromGuid guid
+                        Rvn = Rvn 3u
+                        State = { Count = 1 }
+                    }
 
                     Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
@@ -71,7 +77,7 @@ module EntityEventHelperTests =
                     let entries =
                         NonEmptyList<Entry>
                             .Create(
-                                SnapshotJson(Rvn 3u, ({ Count = 1 } :> IEntity).SnapshotJson),
+                                SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                 [
                                     EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
                                 ]
@@ -82,8 +88,11 @@ module EntityEventHelperTests =
 
                 match result with
                 | Ok counter ->
-                    let expectedCounter =
-                        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn 4u, { Count = 2 })
+                    let expectedCounter = {
+                        Id = CounterId.FromGuid guid
+                        Rvn = Rvn 4u
+                        State = { Count = 2 }
+                    }
 
                     Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
@@ -104,7 +113,7 @@ module EntityEventHelperTests =
                                 [
                                     EventJson(Rvn 2u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
                                     EventJson(Rvn 3u, fixedUtcNow, auditUser2Id, (Incremented :> IEvent).EventJson)
-                                    SnapshotJson(Rvn 3u, ({ Count = 1 } :> IEntity).SnapshotJson)
+                                    SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson)
                                 ]
                             )
 
@@ -121,4 +130,4 @@ module EntityEventHelperTests =
             }
         ]
 
-    let tests = testList $"{nameof EntityEventHelper}" [ happy; sad ]
+    let tests = testList $"{nameof EntityHelper}" [ happy; sad ]

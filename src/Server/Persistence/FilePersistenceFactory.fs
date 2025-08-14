@@ -91,8 +91,8 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
         )
 
     interface IPersistenceFactory with
-        member _.GetReader<'a> partitionName =
-            fst (getOrAdd (partitionName, typeof<'a>.Name))
+        member _.GetReader<'state, 'event when 'state :> IState<'state, 'event>> partitionName =
+            fst (getOrAdd (partitionName, typeof<'state>.Name))
 
-        member _.GetWriter<'a> partitionName =
-            snd (getOrAdd (partitionName, typeof<'a>.Name))
+        member _.GetWriter<'state, 'event when 'state :> IState<'state, 'event>> partitionName =
+            snd (getOrAdd (partitionName, typeof<'state>.Name))

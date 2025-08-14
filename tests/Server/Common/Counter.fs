@@ -1,17 +1,23 @@
 namespace Aornota.Ubersweep.Tests.Server.Common
 
+open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Entities
-open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Common
-open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
+open System
 
 type CounterId =
     private
-    | UserId
+    | CounterId of guid: Guid
 
-    interface IId
+    static member Create() = CounterId(Guid.NewGuid())
+    static member FromGuid guid = CounterId guid
+
+    interface IId with
+        member this.Guid =
+            let (CounterId guid) = this
+            guid
 
 type CounterInitCommand = Initialize of count: int
 
@@ -20,13 +26,6 @@ type CounterCommand =
     | Decrement
     | MultiplyBy of multiplier: int
     | DivideBy of divisor: int
-
-type Counter = {
-    Count: int
-} with
-
-    interface IEntity with
-        member this.SnapshotJson = Json.toJson this
 
 type CounterInitEvent =
     | Initialized of count: int
@@ -43,38 +42,48 @@ type CounterEvent =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type CounterEventHelper() =
-    inherit EntityEventHelper<CounterId, Counter, CounterInitEvent, CounterEvent>()
+type Counter = {
+    Count: int
+} with
 
-    override _.InitializeFromEvent(guid, Initialized count) =
-        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn.InitialRvn, { Count = count })
+    interface IState<Counter, CounterEvent> with
+        member this.SnapshotJson = Json.toJson this
 
-    override _.Evolve entity event =
-        let state =
+        member this.Evolve event =
             match event with
-            | Incremented -> {
-                entity.State with
-                    Count = entity.State.Count + 1
-              }
-            | Decremented -> {
-                entity.State with
-                    Count = entity.State.Count - 1
-              }
+            | Incremented -> { this with Count = this.Count + 1 }
+            | Decremented -> { this with Count = this.Count - 1 }
             | MultipliedBy multiplier -> {
-                entity.State with
-                    Count = entity.State.Count * multiplier
+                this with
+                    Count = this.Count * multiplier
               }
             | DividedBy divisor -> {
-                entity.State with
-                    Count = entity.State.Count / divisor
+                this with
+                    Count = this.Count / divisor
               }
 
-        entity.Evolve state
-        entity
+type CounterEventHelper() =
+    inherit EntityHelper<CounterId, Counter, CounterInitCommand, CounterInitEvent, CounterEvent>()
+
+    override _.IdFromGuid guid = CounterId.FromGuid guid
+
+    override _.InitFromCommand(guid, Initialize count) =
+        {
+            Id = CounterId.FromGuid guid
+            Rvn = Rvn.InitialRvn
+            State = { Count = count }
+        },
+        Initialized count
+
+    override _.InitFromEvent(guid, Initialized count) = {
+        Id = CounterId.FromGuid guid
+        Rvn = Rvn.InitialRvn
+        State = { Count = count }
+    }
 
 [<RequireQualifiedAccess>]
 module Counter =
-    let private decide command (_: Entity<CounterId, Counter>) =
+    let private decide command (_: Counter) =
         match command with
         | Increment -> Ok Incremented
         | Decrement -> Ok Decremented
@@ -85,13 +94,9 @@ module Counter =
             else
                 Error "Cannot divide by zero"
 
-    let eventHelper = CounterEventHelper()
+    let helper = CounterEventHelper()
 
-    let initializeFromCommand (guid, Initialize count) =
-        Entity<CounterId, Counter>(EntityId<CounterId>.FromGuid guid, Rvn.InitialRvn, { Count = count }),
-        Initialized count
-
-    let apply command entity = result {
-        let! event = decide command entity
-        return eventHelper.Evolve entity event, event
+    let apply command (entity: Entity<CounterId, Counter, CounterEvent>) = result {
+        let! event = decide command entity.State
+        return entity.Evolve event, event
     }

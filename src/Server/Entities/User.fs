@@ -1,24 +1,12 @@
 namespace Aornota.Ubersweep.Server.Entities
 
 open Aornota.Ubersweep.Server.Common
-open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
 
 // TODO: Think about permissions...
-
-type User = {
-    UserName: string
-    PasswordSalt: string
-    PasswordHash: string
-    UserType: UserType
-    MustChangePasswordReason: MustChangePasswordReason option
-} with
-
-    interface IEntity with
-        member this.SnapshotJson = Json.toJson this
 
 type UserInitEvent =
     | UserCreated of userName: string * passwordSalt: string * passwordHash: string * userType: UserType
@@ -34,48 +22,75 @@ type UserEvent =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type UserEventHelper() =
-    inherit EntityEventHelper<UserId, User, UserInitEvent, UserEvent>()
+type User = {
+    UserCommon: UserCommon'
+    PasswordSalt: string
+    PasswordHash: string
+} with
 
-    override _.InitializeFromEvent(guid, UserCreated(userName, passwordSalt, passwordHash, userType)) =
-        Entity<UserId, User>(
-            EntityId<UserId>.FromGuid guid,
-            Rvn.InitialRvn,
-            {
-                UserName = userName
+    interface IState<User, UserEvent> with
+        member this.SnapshotJson = Json.toJson this
+
+        member this.Evolve event =
+            match event with
+            | UserTypeChanged userType -> {
+                this with
+                    UserCommon.UserType = userType
+              }
+            | PasswordChanged(passwordSalt, passwordHash) -> {
+                this with
+                    UserCommon.MustChangePasswordReason = None
+                    PasswordSalt = passwordSalt
+                    PasswordHash = passwordHash
+              }
+            | PasswordReset(passwordSalt, passwordHash) -> {
+                this with
+                    UserCommon.MustChangePasswordReason = Some PasswordHasBeenReset
+                    PasswordSalt = passwordSalt
+                    PasswordHash = passwordHash
+              }
+
+type UserHelper() =
+    inherit EntityHelper<UserId, User, UserInitCommand, UserInitEvent, UserEvent>()
+
+    override _.IdFromGuid guid = UserId.FromGuid guid
+
+    override _.InitFromCommand(guid, CreateUser(userName, password, userType)) =
+        let passwordSalt = salt ()
+        let passwordHash = hash (password, passwordSalt)
+
+        {
+            Id = UserId.FromGuid guid
+            Rvn = Rvn.InitialRvn
+            State = {
+                UserCommon = {
+                    UserName = userName
+                    UserType = userType
+                    MustChangePasswordReason = Some FirstSignIn
+                }
                 PasswordSalt = passwordSalt
                 PasswordHash = passwordHash
+            }
+        },
+        UserCreated(userName, passwordSalt, passwordHash, userType)
+
+    override _.InitFromEvent(guid, UserCreated(userName, passwordSalt, passwordHash, userType)) = {
+        Id = UserId.FromGuid guid
+        Rvn = Rvn.InitialRvn
+        State = {
+            UserCommon = {
+                UserName = userName
                 UserType = userType
                 MustChangePasswordReason = Some FirstSignIn
             }
-        )
-
-    override _.Evolve entity event =
-        let state =
-            match event with
-            | UserTypeChanged userType -> {
-                entity.State with
-                    UserType = userType
-              }
-            | PasswordChanged(passwordSalt, passwordHash) -> {
-                entity.State with
-                    PasswordSalt = passwordSalt
-                    PasswordHash = passwordHash
-                    MustChangePasswordReason = None
-              }
-            | PasswordReset(passwordSalt, passwordHash) -> {
-                entity.State with
-                    PasswordSalt = passwordSalt
-                    PasswordHash = passwordHash
-                    MustChangePasswordReason = Some PasswordHasBeenReset
-              }
-
-        entity.Evolve state
-        entity
+            PasswordSalt = passwordSalt
+            PasswordHash = passwordHash
+        }
+    }
 
 [<RequireQualifiedAccess>]
 module User =
-    let private decide command (_: Entity<UserId, User>) =
+    let private decide command (_: User) =
         match command with
         | ChangeUserType userType -> Ok(UserTypeChanged userType)
         | ChangePassword(password, confirmPassword) ->
@@ -91,26 +106,9 @@ module User =
                 let passwordSalt = salt ()
                 Ok(PasswordReset(passwordSalt, hash (password, passwordSalt)))
 
-    let eventHelper = UserEventHelper()
+    let helper = UserHelper()
 
-    let initializeFromCommand (guid, CreateUser(userName, password, userType)) =
-        let passwordSalt = salt ()
-        let passwordHash = hash (password, passwordSalt)
-
-        Entity<UserId, User>(
-            EntityId<UserId>.FromGuid guid,
-            Rvn.InitialRvn,
-            {
-                UserName = userName
-                PasswordSalt = passwordSalt
-                PasswordHash = passwordHash
-                UserType = userType
-                MustChangePasswordReason = Some FirstSignIn
-            }
-        ),
-        UserCreated(userName, passwordSalt, passwordHash, userType)
-
-    let apply command entity = result {
-        let! event = decide command entity
-        return eventHelper.Evolve entity event, event
+    let apply command (entity: Entity<UserId, User, UserEvent>) = result {
+        let! event = decide command entity.State
+        return entity.Evolve event, event
     }

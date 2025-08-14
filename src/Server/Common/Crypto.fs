@@ -5,7 +5,7 @@ open System.Security.Cryptography
 open System.Text
 
 [<AutoOpen>]
-module Common =
+module Crypto =
     let private rng = RandomNumberGenerator.Create()
     let private sha512 = SHA512.Create()
     let private encoding = Encoding.UTF8

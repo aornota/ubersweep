@@ -5,10 +5,10 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Common\IId.fs" />
     <Compile Include="Common\Json.fs" />
     <Compile Include="Common\NonEmptyList.fs" />
     <Compile Include="Common\Rvn.fs" />
-    <Compile Include="Entities\Entity.fs" />
     <Compile Include="Entities\User.fs" />
     <Compile Include="TEMP-Shared.fs" />
     <Content Include="paket.references" />

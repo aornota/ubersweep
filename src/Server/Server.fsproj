@@ -12,13 +12,14 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />
-    <Compile Include="Common\Common.fs" />
+    <Compile Include="Common\Crypto.fs" />
+    <Compile Include="Common\IEvent.fs" />
+    <Compile Include="Common\IState.fs" />
     <Compile Include="Common\SourcedLogger.fs" />
     <Compile Include="Persistence\Types.fs" />
     <Compile Include="Persistence\FileReaderAndWriter.fs" />
     <Compile Include="Persistence\FilePersistenceFactory.fs" />
     <Compile Include="Entities\Entity.fs" />
-    <Compile Include="Persistence\EntityEventHelper.fs" />
     <Compile Include="Entities\User.fs" />
     <Compile Include="TEMP-Storage.fs" />
     <Compile Include="Startup.fs" />

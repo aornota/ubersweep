@@ -7,5 +7,5 @@ open Aornota.Ubersweep.Shared.Entities
 module Common =
     let fixedUtcNow = (FixedClock.instance :> IPersistenceClock).GetUtcNow()
 
-    let auditUser1Id: EntityId<UserId> = EntityId<UserId>.Create()
-    let auditUser2Id: EntityId<UserId> = EntityId<UserId>.Create()
+    let auditUser1Id = UserId.Create()
+    let auditUser2Id = UserId.Create()

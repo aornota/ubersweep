@@ -8,11 +8,7 @@ open Serilog
 
 module Main =
     let tests =
-        testList "Server" [
-            EntityEventHelperTests.tests
-            FileReaderAndWriterTests.tests
-            UserTests.tests
-        ]
+        testList "Server" [ EntityHelperTests.tests; FileReaderAndWriterTests.tests; UserTests.tests ]
 
     [<EntryPoint>]
     let main _ =
