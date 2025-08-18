@@ -109,7 +109,7 @@ type FileReaderAndWriter
                     | h :: _ ->
                         return!
                             Error
-                                $"At least one entry caused a deserialization error when reading {guid} for {pathForError} (e.g. {h})"
+                                $"At least one line caused a deserialization error when reading {guid} for {pathForError} (e.g. {h})"
                     | _ ->
                         let entries =
                             deserializationResults
@@ -119,7 +119,7 @@ type FileReaderAndWriter
                                 | Error _ -> None)
 
                         match checkConsistency entries None None with
-                        | Ok _ ->
+                        | Ok() ->
                             // If there are any snapshots, only return the last snapshot and subsequent entries (if any)
                             let entries = fromLastSnapshot (entries |> List.rev) []
                             return! NonEmptyList<Entry>.FromList entries

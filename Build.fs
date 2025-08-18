@@ -12,10 +12,12 @@ initializeContext ()
 let sharedPath = Path.getFullName "src/Shared"
 let serverPath = Path.getFullName "src/Server"
 let clientPath = Path.getFullName "src/Client"
+let migrationPath = Path.getFullName "src/Migration"
 let deployPath = Path.getFullName "deploy"
 let sharedTestsPath = Path.getFullName "tests/Shared"
 let serverTestsPath = Path.getFullName "tests/Server"
 let clientTestsPath = Path.getFullName "tests/Client"
+
 
 Target.create "Clean" (fun _ ->
     Shell.cleanDir deployPath
@@ -73,6 +75,8 @@ Target.create "Format" (fun _ -> run dotnet [ "fantomas"; "." ] ".")
 Target.create "RunServerTests" (fun _ -> run dotnet [ "run" ] serverTestsPath) // TEMP
 
 Target.create "WatchServer" (fun _ -> run dotnet [ "watch"; "run"; "--no-restore" ] serverPath) // TEMP
+
+Target.create "WatchMigration" (fun _ -> run dotnet [ "watch"; "run"; "--no-restore" ] migrationPath) // TEMP
 
 open Fake.Core.TargetOperators
 

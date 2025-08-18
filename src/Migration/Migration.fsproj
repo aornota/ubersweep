@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <MSBuildWarningsAsMessages>
+      <!-- MSB3277 is "Found conflicts between different versions of {package} that could not be resolved", e.g. for FSharp.Core (8.0.0.0 and 9.0.0.0) -->
+      $(MSBuildWarningsAsMessages);MSB3277
+    </MSBuildWarningsAsMessages>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="paket.references" />
+    <Compile Include="Common\LegacyDeserializer.fs" />
+    <Compile Include="Common\Markdown.fs" />
+    <Compile Include="Common\SourcedLogger.fs" />
+    <Compile Include="Common\UnitsOfMeasure.fs" />
+    <Compile Include="Domain\Core.fs" />
+    <Compile Include="Domain\User.fs" />
+    <Compile Include="Domain\Squad.fs" />
+    <Compile Include="Domain\Fixture.fs" />
+    <Compile Include="Domain\Draft.fs" />
+    <Compile Include="Domain\News.fs" />
+    <Compile Include="Domain\UserDraft.fs" />
+    <Compile Include="Events\IHelper.fs" />
+    <Compile Include="Events\DraftEvents.fs" />
+    <Compile Include="Events\FixtureEvents.fs" />
+    <Compile Include="Events\NewsEvents.fs" />
+    <Compile Include="Events\SquadEvents.fs" />
+    <Compile Include="Events\UserEvents.fs" />
+    <Compile Include="Events\UserDraftEvents.fs" />
+    <Compile Include="Reader.fs" />
+    <Compile Include="Main.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Shared\Shared.fsproj" />
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

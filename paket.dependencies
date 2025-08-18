@@ -4,6 +4,7 @@ storage: none
 
 nuget Elmish.Bridge.Giraffe
 nuget Expecto ~> 9
+nuget Fable.JsonConverter
 nuget FsToolkit.ErrorHandling
 nuget Giraffe.SerilogExtensions
 nuget jose-jwt
