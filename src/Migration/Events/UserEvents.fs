@@ -68,7 +68,7 @@ type UserHelper() =
         | Some(user, rvn), UserTypeChanged(_, userType) :: t ->
             applyEvents t (Some({ user with UserType = userType }, rvn.NextRvn))
         | Some userAndRvn, [] -> Ok userAndRvn
-        | None, [] -> Error $"No {nameof UserEvent}s"
+        | None, [] -> Error $"No initial {nameof UserEvent}"
         | None, h :: _ -> Error $"Invalid initial {nameof UserEvent}: {h}"
         | Some _, UserCreated _ :: _ -> Error $"Invalid non-initial {nameof UserEvent}: {nameof UserCreated}"
 

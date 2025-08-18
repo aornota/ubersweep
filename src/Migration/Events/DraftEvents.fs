@@ -1,8 +1,10 @@
 namespace Aornota.Ubersweep.Migration.Events
 
 open Aornota.Ubersweep.Migration.Domain
+open Aornota.Ubersweep.Shared.Common
 
 open System
+open System.Collections.Generic
 
 type DraftEvent =
     | DraftCreated of draftId: DraftId * draftOrdinal: DraftOrdinal * draftType: DraftType
@@ -29,3 +31,53 @@ type DraftEvent =
         userId: UserId *
         timestamp: DateTimeOffset
     | FreePick of draftId: DraftId * draftPick: DraftPick * userId: UserId * timestamp: DateTimeOffset
+
+type Draft = {
+    DraftOrdinal: DraftOrdinal
+    DraftStatus: DraftStatus
+    DraftPicks: (DraftPick * PickedBy) list
+    ProcessingEvents: ProcessingEvent list
+    PickPriorities: Dictionary<UserId, uint32>
+}
+
+type DraftHelper() =
+    // TODO: How best to handle lists (e.g. add to head, then reverse when returning)?...
+    let rec applyEvents (events: DraftEvent list) draftsAndRvn =
+        match draftsAndRvn, events with
+        | None, DraftCreated(_, draftOrdinal, draftType) :: t ->
+            applyEvents
+                t
+                (Some(
+                    {
+                        DraftOrdinal = draftOrdinal
+                        DraftStatus =
+                            match draftType with
+                            | Constrained(starts, ends) -> PendingOpen(starts, ends)
+                            | Unconstrained -> PendingFreeSelection
+                        DraftPicks = []
+                        ProcessingEvents = []
+                        PickPriorities = Dictionary<UserId, uint32>()
+                    },
+                    Rvn.InitialRvn
+                ))
+        // TODO: DraftOpened...
+        // TODO: DraftPendingProcessing...
+        // TODO: DraftProcessed...
+        // TODO: DraftFreeSelection...
+        // TODO: ProcessingStarted...
+        // TODO: WithdrawnPlayersIgnored...
+        // TODO: RoundStarted...
+        // TODO: AlreadyPickedIgnored...
+        // TODO: NoLongerRequiredIgnored...
+        // TODO: UncontestedPick...
+        // TODO: ContestedPick...
+        // TODO: PickPriorityChanged...
+        // TODO: Picked...
+        // TODO: FreePick...
+        | Some draftsAndRvn, [] -> Ok draftsAndRvn
+        | None, [] -> Error $"No initial {nameof DraftEvent}"
+        | None, h :: _ -> Error $"Invalid initial {nameof DraftEvent}: {h}"
+        | Some _, DraftCreated _ :: _ -> Error $"Invalid non-initial {nameof DraftEvent}: {nameof DraftCreated}"
+
+    interface IHelper<DraftEvent, Draft> with
+        member _.ApplyEvents events = applyEvents events None

@@ -1,6 +1,7 @@
 namespace Aornota.Ubersweep.Migration.Events
 
 open Aornota.Ubersweep.Migration.Domain
+open Aornota.Ubersweep.Shared.Common
 
 type UserDraftEvent =
     | UserDraftCreated of userDraftId: UserDraftId * userId: UserId * draftId: DraftId

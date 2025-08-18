@@ -1,17 +1,11 @@
 namespace Aornota.Ubersweep.Migration.Domain
 
+(*
 open Aornota.Ubersweep.Migration.Common
 open Aornota.Ubersweep.Shared.Common
+*)
 
 open System
-
-type IMatchEvent = interface end
-
-type IMatchOutcome = interface end
-
-type IPlayerScoreEvent = interface end
-
-type ITeamScoreEvent = interface end
 
 type FixtureId =
     | FixtureId of guid: Guid
@@ -22,16 +16,12 @@ type Role =
     | Home
     | Away
 
-type IStage = interface end
-
 type StageEuro =
     | Group of group: Group6
     | RoundOf16 of matchNumber: uint32
     | QuarterFinal of quarterFinalOrdinal: uint32
     | SemiFinal of semiFinalOrdinal: uint32
     | Final
-
-    interface IStage
 
 type StageFifa =
     | Group of group: Group8
@@ -41,8 +31,6 @@ type StageFifa =
     | ThirdPlacePlayOff
     | Final
 
-    interface IStage
-
 type StageRwc =
     | Group of group: Group4
     | QuarterFinal of quarterFinalOrdinal: uint32
@@ -50,34 +38,29 @@ type StageRwc =
     | BronzeFinal
     | Final
 
-    interface IStage
-
-type IUnconfirmed = interface end
-
 type UnconfirmedEuro =
     | Winner of stage: StageEuro
     | RunnerUp of group: Group6
     | ThirdPlace of groups: Group6 list
-
-    interface IUnconfirmed
 
 type UnconfirmedFifa =
     | Winner of stage: StageFifa
     | RunnerUp of group: Group8
     | Loser of semiFinalOrdinal: uint32
 
-    interface IUnconfirmed
+type UnconfirmedFifaV2 =
+    | Winner of stage: StageFifa
+    | RunnerUp of group: Group8
+    | Loser of stage: StageFifa
 
 type UnconfirmedRwc =
     | GroupRunnerUp of group: Group4
     | StageWinner of stage: StageRwc
     | SemiFinalLoser of semiFinalOrdinal: uint32
 
-    interface IUnconfirmed
-
-type Participant =
+type Participant<'unconfirmed> =
     | Confirmed of squadId: SquadId
-    | Unconfirmed of unconfirmed: IUnconfirmed
+    | Unconfirmed of unconfirmed: 'unconfirmed
 
 type MatchEventId =
     | MatchEventId of guid: Guid
@@ -99,8 +82,6 @@ type MatchEventFootball =
     | PenaltyShootout of homeScore: uint32 * awayScore: uint32
     | ManOfTheMatch of squadId: SquadId * playerId: PlayerId
 
-    interface IMatchEvent
-
 type KickOutcome =
     | Successful
     | Missed
@@ -115,17 +96,14 @@ type MatchEventRugby =
     | RedCard of squadId: SquadId * playerId: PlayerId
     | ManOfTheMatch of squadId: SquadId * playerId: PlayerId
 
-    interface IMatchEvent
-
+(*
 type PenaltyShootoutOutcome = { HomeScore: uint32; AwayScore: uint32 }
 
 type MatchOutcomeFootball = {
     HomeGoals: uint32
     AwayGoals: uint32
     PenaltyShootoutOutcome: PenaltyShootoutOutcome option
-} with
-
-    interface IMatchOutcome
+}
 
 type MatchOutcomeRugby = {
     HomeScore: uint32
@@ -134,9 +112,7 @@ type MatchOutcomeRugby = {
     AwayTotalTries: uint32
     HomePenaltyTries: uint32
     AwayPenaltyTries: uint32
-} with
-
-    interface IMatchOutcome
+}
 
 type Card =
     | Yellow
@@ -148,8 +124,6 @@ type TeamScoreEventFootball =
     | MatchDrawn
     | PlayerCard of playerId: PlayerId * card: Card
 
-    interface ITeamScoreEvent
-
 type TeamScoreEventRugby =
     | MatchWon
     | MatchDrawn
@@ -157,8 +131,6 @@ type TeamScoreEventRugby =
     | LosingBonusPoint
     | PenaltyTryScored
     | PlayerCard of playerId: PlayerId * card: Card
-
-    interface ITeamScoreEvent
 
 type PlayerScoreEventFootball =
     | GoalScored
@@ -171,8 +143,6 @@ type PlayerScoreEventFootball =
     | CleanSheetKept
     | ManOfTheMatchAwarded
 
-    interface IPlayerScoreEvent
-
 type PlayerScoreEventRugby =
     | TryScored
     | PenaltyKickSuccessful
@@ -183,26 +153,25 @@ type PlayerScoreEventRugby =
     | Card of card: Card
     | ManOfTheMatchAwarded
 
-    interface IPlayerScoreEvent
-
-type ScoreEvents = {
-    TeamScoreEvents: (ITeamScoreEvent * int<point>) list
-    PlayerScoreEvents: (PlayerId * (IPlayerScoreEvent * int<point>) list) list
+type ScoreEvents<'teamScoreEvent, 'playerScoreEvent> = {
+    TeamScoreEvents: ('teamScoreEvent * int<point>) list
+    PlayerScoreEvents: (PlayerId * ('playerScoreEvent * int<point>) list) list
 }
 
-type MatchResult = {
-    MatchOutcome: IMatchOutcome
-    HomeScoreEvents: ScoreEvents
-    AwayScoreEvents: ScoreEvents
-    MatchEvents: (MatchEventId * IMatchEvent) list
+type MatchResult<'matchEvent, 'matchOutcome, 'teamScoreEvent, 'playerScoreEvent> = {
+    MatchOutcome: 'matchOutcome
+    HomeScoreEvents: ScoreEvents<'teamScoreEvent, 'playerScoreEvent>
+    AwayScoreEvents: ScoreEvents<'teamScoreEvent, 'playerScoreEvent>
+    MatchEvents: (MatchEventId * 'matchEvent) list
 }
 
-type FixtureDto = {
+type FixtureDto<'stage, 'unconfirmed, 'matchEvent, 'matchOutcome, 'teamScoreEvent, 'playerScoreEvent> = {
     FixtureId: FixtureId
     Rvn: Rvn
-    Stage: IStage
-    HomeParticipant: Participant
-    AwayParticipant: Participant
+    Stage: 'stage
+    HomeParticipant: Participant<'unconfirmed>
+    AwayParticipant: Participant<'unconfirmed>
     KickOff: DateTimeOffset
-    MatchResult: MatchResult option
+    MatchResult: MatchResult<'matchEvent, 'matchOutcome, 'teamScoreEvent, 'playerScoreEvent> option
 }
+*)
