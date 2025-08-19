@@ -12,6 +12,7 @@
     <Compile Include="Common\Measures.fs" />
     <Compile Include="Common\NonEmptyList.fs" />
     <Compile Include="Common\Rvn.fs" />
+    <Compile Include="Common\TypeNameSanitizer.fs" />
     <Compile Include="Entities\User.fs" />
     <Compile Include="Entities\Squad.fs" />
     <Compile Include="Entities\Fixture.fs" />

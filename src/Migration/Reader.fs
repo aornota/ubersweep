@@ -34,7 +34,7 @@ type Reader<'event>(path: string, useLegacyDeserializer, logger) =
     [<Literal>]
     let fileExtension = "events"
 
-    let logger = SourcedLogger.Create<Reader<_>>(typeof<'event>.Name, logger)
+    let logger = SourcedLogger.Create<Reader<_>>(sanitize typeof<'event>, logger)
 
     do logger.Information("Using path: {path}", DirectoryInfo(path).FullName)
 

@@ -1,6 +1,7 @@
 namespace Aornota.Ubersweep.Server.Persistence
 
 open Aornota.Ubersweep.Server.Common
+open Aornota.Ubersweep.Shared.Common
 
 open Microsoft.Extensions.Configuration
 open System
@@ -81,8 +82,8 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
     let dic =
         ConcurrentDictionary<PartitionName option * EntityName, IReader * IWriter>()
 
-    let getOrAdd (partitionName, typeName: string) =
-        let entityName = typeName.Split('`')[0]
+    let getOrAdd (partitionName, type': Type) =
+        let entityName = sanitize type'
 
         dic.GetOrAdd(
             (partitionName, entityName),
@@ -95,7 +96,7 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
 
     interface IPersistenceFactory with
         member _.GetReader<'state, 'event when 'state :> IState<'state, 'event>> partitionName =
-            fst (getOrAdd (partitionName, typeof<'state>.Name))
+            fst (getOrAdd (partitionName, typeof<'state>))
 
         member _.GetWriter<'state, 'event when 'state :> IState<'state, 'event>> partitionName =
-            snd (getOrAdd (partitionName, typeof<'state>.Name))
+            snd (getOrAdd (partitionName, typeof<'state>))

@@ -10,6 +10,7 @@ open Aornota.Ubersweep.Shared.Entities
 open FsToolkit.ErrorHandling
 open Microsoft.Extensions.Configuration
 open System
+open System.IO
 
 type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, logger) =
     [<Literal>]
@@ -89,7 +90,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         let! _ =
             if all.Length > 0 then
                 logger.Error("...cannot migrate as {draft}s already exist", nameof Draft)
-                Error()
+                Error []
             else
                 Ok()
 
@@ -103,7 +104,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         let! _ =
             if all.Length > 0 then
                 logger.Error("...cannot migrate as {fixture}s already exist", nameof Fixture)
-                Error()
+                Error []
             else
                 Ok()
 
@@ -114,7 +115,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         let! _ =
             if all.Length > 0 then
                 logger.Error("...cannot migrate as {post}s already exist", nameof Post)
-                Error()
+                Error []
             else
                 Ok()
 
@@ -126,7 +127,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         let! _ =
             if all.Length > 0 then
                 logger.Error("...cannot migrate as {squad}s already exist", nameof Squad)
-                Error()
+                Error []
             else
                 Ok()
 
@@ -137,7 +138,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         let! _ =
             if all.Length > 0 then
                 logger.Error("...cannot migrate as {userdraft}s already exist", nameof UserDraft)
-                Error()
+                Error []
             else
                 Ok()
 
@@ -151,7 +152,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 Ok()
             else
                 logger.Information "Skipping migration"
-                Error()
+                Error []
 
         let reader = persistenceFactory.GetReader<User, UserEvent> None
         let! all = reader.ReadAllAsync()
@@ -159,7 +160,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         let! _ =
             if all.Length > 0 then
                 logger.Error("...cannot migrate as {user}s already exist", nameof User)
-                Error()
+                Error []
             else
                 Ok()
 
@@ -187,13 +188,31 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             this.CheckPartitionAsync<GroupAToF, StageEuro, UnconfirmedEuro, PlayerTypeFootball, MatchEventFootball>
                 "2024-euro"
 
+        let fifa2018 = Partition.fifa2018 (Path.Combine(root, "2018-fifa"), logger)
+        let! fifa2018Users = fifa2018.ReadDrafts()
+
+        let rwc2019 = Partition.rwc2019 (Path.Combine(root, "2019-rwc"), logger)
+        let! rwc2019Users = rwc2019.ReadDrafts()
+
+        let euro2021 = Partition.euro2021 (Path.Combine(root, "2021-euro"), logger)
+        let! euro2021Users = euro2021.ReadDrafts()
+
+        let fifa2022 = Partition.fifa2022 (Path.Combine(root, "2022-fifa"), logger)
+        let! fifa2022Users = fifa2022.ReadDrafts()
+
+        let rwc2023 = Partition.rwc2023 (Path.Combine(root, "2023-rwc"), logger)
+        let! rwc2023Users = rwc2023.ReadDrafts()
+
+        let euro2024 = Partition.euro2024 (Path.Combine(root, "2024-euro"), logger)
+        let! euro2024Users = euro2024.ReadDrafts()
+
         (* TODO:
             [-- bail if any Sweepstakes?...]
             -- for each "partition":
                 - read events and entities...
                 - create User mapping...
                 - write Users...
-                - write mapped events (or migrated snapshots?)...*)
+                - write mapped events (or migrated snapshots, e.g. for Users?)...*)
 
         ()
     }
