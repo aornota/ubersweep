@@ -5,6 +5,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Common\Core.fs" />
     <Compile Include="Common\IId.fs" />
     <Compile Include="Common\Json.fs" />
     <Compile Include="Common\Markdown.fs" />
@@ -12,6 +13,11 @@
     <Compile Include="Common\NonEmptyList.fs" />
     <Compile Include="Common\Rvn.fs" />
     <Compile Include="Entities\User.fs" />
+    <Compile Include="Entities\Squad.fs" />
+    <Compile Include="Entities\Fixture.fs" />
+    <Compile Include="Entities\Post.fs" />
+    <Compile Include="Entities\Draft.fs" />
+    <Compile Include="Entities\UserDraft.fs" />
     <Compile Include="TEMP-Shared.fs" />
     <Content Include="paket.references" />
   </ItemGroup>

@@ -20,7 +20,12 @@
     <Compile Include="Persistence\FileReaderAndWriter.fs" />
     <Compile Include="Persistence\FilePersistenceFactory.fs" />
     <Compile Include="Entities\Entity.fs" />
+    <Compile Include="Entities\Draft.fs" />
+    <Compile Include="Entities\Fixture.fs" />
+    <Compile Include="Entities\Post.fs" />
+    <Compile Include="Entities\Squad.fs" />
     <Compile Include="Entities\User.fs" />
+    <Compile Include="Entities\UserDraft.fs" />
     <Compile Include="TEMP-Storage.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Host.fs" />

@@ -1,5 +1,5 @@
-FSharp.Core
-Serilog
-FsToolkit.ErrorHandling
-Serilog.Sinks.Console
 Fable.JsonConverter
+FSharp.Core
+FsToolkit.ErrorHandling
+Serilog
+Serilog.Sinks.Console

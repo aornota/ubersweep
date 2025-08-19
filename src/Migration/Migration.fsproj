@@ -12,16 +12,16 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include="paket.references" />
+    <Compile Include="Common\IHelper.fs" />
     <Compile Include="Common\LegacyDeserializer.fs" />
     <Compile Include="Common\SourcedLogger.fs" />
     <Compile Include="Domain\Core.fs" />
     <Compile Include="Domain\User.fs" />
     <Compile Include="Domain\Squad.fs" />
     <Compile Include="Domain\Fixture.fs" />
-    <Compile Include="Domain\Draft.fs" />
     <Compile Include="Domain\News.fs" />
+    <Compile Include="Domain\Draft.fs" />
     <Compile Include="Domain\UserDraft.fs" />
-    <Compile Include="Events\IHelper.fs" />
     <Compile Include="Events\DraftEvents.fs" />
     <Compile Include="Events\FixtureEvents.fs" />
     <Compile Include="Events\NewsEvents.fs" />

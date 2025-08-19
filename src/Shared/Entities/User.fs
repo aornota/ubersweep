@@ -4,16 +4,6 @@ open Aornota.Ubersweep.Shared.Common
 
 open System
 
-type UserType =
-    | SuperUser
-    | Administrator
-    | Pleb
-    | PersonaNonGrata
-
-type MustChangePasswordReason =
-    | FirstSignIn
-    | PasswordReset
-
 type UserId =
     private
     | UserId of guid: Guid
@@ -25,6 +15,16 @@ type UserId =
         member this.Guid =
             let (UserId guid) = this
             guid
+
+type UserType =
+    | SuperUser
+    | Administrator
+    | Pleb
+    | PersonaNonGrata
+
+type MustChangePasswordReason =
+    | FirstSignIn
+    | PasswordReset
 
 type UserInitCommand = CreateUser of userName: string * password: string * userType: UserType
 

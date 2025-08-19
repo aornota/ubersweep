@@ -1,4 +1,4 @@
-namespace Aornota.Ubersweep.Migration.Events
+namespace Aornota.Ubersweep.Migration.Common
 
 open Aornota.Ubersweep.Shared.Common
 

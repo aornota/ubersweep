@@ -1,5 +1,6 @@
 namespace Aornota.Ubersweep.Migration.Events
 
+open Aornota.Ubersweep.Migration.Common
 open Aornota.Ubersweep.Migration.Domain
 open Aornota.Ubersweep.Shared.Common
 
