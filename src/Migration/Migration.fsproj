@@ -29,6 +29,7 @@
     <Compile Include="Events\UserEvents.fs" />
     <Compile Include="Events\UserDraftEvents.fs" />
     <Compile Include="Reader.fs" />
+    <Compile Include="Partition.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
   <ItemGroup>

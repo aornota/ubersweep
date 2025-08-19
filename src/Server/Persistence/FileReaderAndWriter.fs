@@ -52,7 +52,7 @@ type FileReaderAndWriter
 
         logger.Verbose("Using snapshot frequency: {description}", description)
 
-    let pathForError = $"...\{DirectoryInfo(root).Name}\{subPath}"
+    let pathForError = $@"...\{DirectoryInfo(root).Name}\{subPath}"
 
     let tryRead (guid: Guid) = asyncResult {
         let rec checkConsistency entries lastRvn lastWasSnapshot =

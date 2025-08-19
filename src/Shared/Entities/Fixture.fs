@@ -62,17 +62,12 @@ type UnconfirmedEuro =
 type UnconfirmedFifa =
     | Winner of stage: StageFifa
     | RunnerUp of group: GroupAToH
-    | Loser of semiFinalOrdinal: uint32
-
-type UnconfirmedFifaV2 =
-    | Winner of stage: StageFifa
-    | RunnerUp of group: GroupAToH
     | Loser of stage: StageFifa
 
 type UnconfirmedRwc =
-    | GroupRunnerUp of group: GroupAToD
-    | StageWinner of stage: StageRwc
-    | SemiFinalLoser of semiFinalOrdinal: uint32
+    | Winner of stage: StageRwc
+    | RunnerUp of group: GroupAToD
+    | Loser of stage: StageRwc
 
 type Participant<'unconfirmed> =
     | Confirmed of squadId: SquadId

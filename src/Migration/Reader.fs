@@ -30,11 +30,11 @@ type private DeserializationHelper(useLegacyDeserializer) =
         else
             Json.fromJson<'a> json
 
-type Reader<'event>(path: string, useLegacyDeserializer, logger: ILogger) =
+type Reader<'event>(path: string, useLegacyDeserializer, logger) =
     [<Literal>]
     let fileExtension = "events"
 
-    let logger = SourcedLogger.Create(typeof<'event>.Name, logger)
+    let logger = SourcedLogger.Create<Reader<_>>(typeof<'event>.Name, logger)
 
     do logger.Information("Using path: {path}", DirectoryInfo(path).FullName)
 
@@ -151,12 +151,18 @@ type Reader<'event>(path: string, useLegacyDeserializer, logger: ILogger) =
             Error [ $"Unexpected error reading all for {path}: {exn.Message}" ]
 
     member _.ReadAll() =
-        logger.Verbose "ReadAll..."
+        logger.Verbose("Reading {event}s for all...", typeof<'event>.Name)
 
         let result = tryReadAll ()
 
         match result with
-        | Ok list -> logger.Verbose("...{length} read", list.Length)
-        | Error errors -> logger.Error $"...{errors}"
+        | Ok list -> logger.Verbose("...{event}s read for {length} file/s", typeof<'event>.Name, list.Length)
+        | Error errors ->
+            logger.Error(
+                "...{length} error/s reading {event}s for all: {errors}",
+                errors.Length,
+                typeof<'event>.Name,
+                errors
+            )
 
         result
