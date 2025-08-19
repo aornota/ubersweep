@@ -58,13 +58,19 @@ type FixtureHelper<'stage, 'unconfirmed, 'matchEvent>() =
 
             applyEvents t (Some(fixture, rvn.NextRvn))
         | Some(fixture, rvn), MatchEventAdded(_, matchEventId, matchEvent) :: t ->
-            fixture.MatchEvents.Add(matchEventId, matchEvent)
+            if not (fixture.MatchEvents.ContainsKey matchEventId) then
+                fixture.MatchEvents.Add(matchEventId, matchEvent)
 
-            applyEvents t (Some(fixture, rvn.NextRvn))
+                applyEvents t (Some(fixture, rvn.NextRvn))
+            else
+                Error $"Invalid {nameof FixtureEvent}: {nameof MatchEventAdded} when already added"
         | Some(fixture, rvn), MatchEventRemoved(_, matchEventId) :: t ->
-            fixture.MatchEvents.Remove matchEventId |> ignore
+            if fixture.MatchEvents.ContainsKey matchEventId then
+                fixture.MatchEvents.Remove matchEventId |> ignore
 
-            applyEvents t (Some(fixture, rvn.NextRvn))
+                applyEvents t (Some(fixture, rvn.NextRvn))
+            else
+                Error $"Invalid {nameof FixtureEvent}: {nameof MatchEventRemoved} when not added"
         | Some(fixture, rvn), FixtureCancelled _ :: t ->
             applyEvents t (Some({ fixture with Cancelled = true }, rvn.NextRvn))
         | Some fixturesAndRvn, [] -> Ok fixturesAndRvn

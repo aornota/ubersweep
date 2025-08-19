@@ -13,9 +13,7 @@
   <ItemGroup>
     <Content Include="paket.references" />
     <Compile Include="Common\LegacyDeserializer.fs" />
-    <Compile Include="Common\Markdown.fs" />
     <Compile Include="Common\SourcedLogger.fs" />
-    <Compile Include="Common\UnitsOfMeasure.fs" />
     <Compile Include="Domain\Core.fs" />
     <Compile Include="Domain\User.fs" />
     <Compile Include="Domain\Squad.fs" />

@@ -56,35 +56,47 @@ type SquadHelper<'group, 'playerType>() =
                     Rvn.InitialRvn
                 ))
         | Some(squad, rvn), PlayerAdded(_, playerId, PlayerName playerName, playerType) :: t ->
-            squad.Players.Add(
-                playerId,
-                {
-                    PlayerName = playerName
-                    PlayerType = playerType
-                    PlayerStatus = Active
-                }
-            )
+            if not (squad.Players.ContainsKey playerId) then
+                squad.Players.Add(
+                    playerId,
+                    {
+                        PlayerName = playerName
+                        PlayerType = playerType
+                        PlayerStatus = Active
+                    }
+                )
 
-            applyEvents t (Some(squad, rvn.NextRvn))
+                applyEvents t (Some(squad, rvn.NextRvn))
+            else
+                Error $"Invalid {nameof SquadEvent}: {nameof PlayerAdded} when already added"
         | Some(squad, rvn), PlayerNameChanged(_, playerId, PlayerName playerName) :: t ->
-            let player = squad.Players.[playerId]
-            squad.Players.[playerId] <- { player with PlayerName = playerName }
+            if squad.Players.ContainsKey playerId then
+                let player = squad.Players.[playerId]
+                squad.Players.[playerId] <- { player with PlayerName = playerName }
 
-            applyEvents t (Some(squad, rvn.NextRvn))
+                applyEvents t (Some(squad, rvn.NextRvn))
+            else
+                Error $"Invalid {nameof SquadEvent}: {nameof PlayerNameChanged} when not added"
         | Some(squad, rvn), PlayerTypeChanged(_, playerId, playerType) :: t ->
-            let player = squad.Players.[playerId]
-            squad.Players.[playerId] <- { player with PlayerType = playerType }
+            if squad.Players.ContainsKey playerId then
+                let player = squad.Players.[playerId]
+                squad.Players.[playerId] <- { player with PlayerType = playerType }
 
-            applyEvents t (Some(squad, rvn.NextRvn))
+                applyEvents t (Some(squad, rvn.NextRvn))
+            else
+                Error $"Invalid {nameof SquadEvent}: {nameof PlayerTypeChanged} when not added"
         | Some(squad, rvn), PlayerWithdrawn(_, playerId, dateWithdrawn) :: t ->
-            let player = squad.Players.[playerId]
+            if squad.Players.ContainsKey playerId then
+                let player = squad.Players.[playerId]
 
-            squad.Players.[playerId] <- {
-                player with
-                    PlayerStatus = Withdrawn dateWithdrawn
-            }
+                squad.Players.[playerId] <- {
+                    player with
+                        PlayerStatus = Withdrawn dateWithdrawn
+                }
 
-            applyEvents t (Some(squad, rvn.NextRvn))
+                applyEvents t (Some(squad, rvn.NextRvn))
+            else
+                Error $"Invalid {nameof SquadEvent}: {nameof PlayerWithdrawn} when not added"
         | Some(squad, rvn), SquadEliminated _ :: t ->
             applyEvents t (Some({ squad with Eliminated = true }, rvn.NextRvn))
         | Some squadAndRvn, [] -> Ok squadAndRvn

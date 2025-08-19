@@ -12,7 +12,7 @@ type UserType =
 
 type MustChangePasswordReason =
     | FirstSignIn
-    | PasswordHasBeenReset
+    | PasswordReset
 
 type UserId =
     private

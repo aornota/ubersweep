@@ -127,4 +127,10 @@ module Main =
             .Check
             rwcTuples
 
+        Checker<DraftEvent, Draft>("drafts", DraftHelper(), logger).Check allTuples
+
+        Checker<UserDraftEvent, UserDraft>("user-drafts", UserDraftHelper(), logger)
+            .Check
+            allTuples
+
         0

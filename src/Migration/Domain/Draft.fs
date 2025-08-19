@@ -1,7 +1,5 @@
 namespace Aornota.Ubersweep.Migration.Domain
 
-open Aornota.Ubersweep.Shared.Common
-
 open System
 
 type DraftId =
@@ -16,7 +14,8 @@ type DraftType =
 type DraftStatus =
     | PendingOpen of starts: DateTimeOffset * ends: DateTimeOffset
     | Opened of ends: DateTimeOffset
-    | PendingProcessing of processingStarted: bool
+    | PendingProcessing
+    | Processing
     | Processed
     | PendingFreeSelection
     | FreeSelection
@@ -29,11 +28,6 @@ type UserDraftPick =
     | TeamPick of squadId: SquadId
     | PlayerPick of squadId: SquadId * playerId: PlayerId
 
-type UserDraftPickDto = {
-    UserDraftPick: UserDraftPick
-    Rank: int
-}
-
 type ProcessingEvent =
     | ProcessingStarted of seed: int
     | WithdrawnPlayersIgnored of ignored: (UserId * (SquadId * PlayerId) list) list
@@ -45,32 +39,6 @@ type ProcessingEvent =
     | PickPriorityChanged of userId: UserId * pickPriority: uint32
     | Picked of draftOrdinal: DraftOrdinal * draftPick: DraftPick * userId: UserId * timestamp: DateTimeOffset
 
-type ProcessingDetails = {
-    UserDraftPicks: (UserId * UserDraftPickDto list) list
-    ProcessingEvents: ProcessingEvent list
-}
-
-type DraftDto = {
-    DraftId: DraftId
-    Rvn: Rvn
-    DraftOrdinal: DraftOrdinal
-    DraftStatus: DraftStatus
-    ProcessingDetails: ProcessingDetails option
-}
-
 type PriorityChange =
     | Increase
     | Decrease
-
-type UserDraftKey = UserId * DraftId
-
-type CurrentUserDraftDto = {
-    UserDraftKey: UserDraftKey
-    Rvn: Rvn
-    UserDraftPickDtos: UserDraftPickDto list
-}
-
-type UserDraftSummaryDto = {
-    UserDraftKey: UserDraftKey
-    PickCount: int
-}

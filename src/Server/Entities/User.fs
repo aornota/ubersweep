@@ -45,7 +45,7 @@ type User = {
               }
             | PasswordReset(passwordSalt, passwordHash) -> {
                 this with
-                    UserCommon.MustChangePasswordReason = Some PasswordHasBeenReset
+                    UserCommon.MustChangePasswordReason = Some MustChangePasswordReason.PasswordReset
                     PasswordSalt = passwordSalt
                     PasswordHash = passwordHash
               }

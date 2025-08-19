@@ -1,3 +1,3 @@
-namespace Aornota.Ubersweep.Migration.Common
+namespace Aornota.Ubersweep.Shared.Common
 
 type Markdown = Markdown of markdown: string

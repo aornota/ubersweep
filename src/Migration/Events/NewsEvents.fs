@@ -1,15 +1,9 @@
 namespace Aornota.Ubersweep.Migration.Events
 
-open Aornota.Ubersweep.Migration.Common
 open Aornota.Ubersweep.Migration.Domain
 open Aornota.Ubersweep.Shared.Common
 
 open System
-
-type PostId =
-    | PostId of guid: Guid
-
-    static member Create() = Guid.NewGuid() |> PostId
 
 type NewsEvent =
     | PostCreated of
