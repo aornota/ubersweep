@@ -20,3 +20,12 @@ type UserDraftEvent =
 
     interface IEvent with
         member this.EventJson = Json.toJson this
+
+type UserDraft = { // TODO: Implement this properly...
+    Dummy: unit
+} with
+
+    interface IState<UserDraft, UserDraftEvent> with
+        member this.SnapshotJson = Json.toJson this
+
+        member this.Evolve event = this

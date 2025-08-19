@@ -2,6 +2,7 @@ namespace Aornota.Ubersweep.Server
 
 open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Entities
+open Aornota.Ubersweep.Server.Migration
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Server.TEMP
 open Aornota.Ubersweep.Shared.Common
@@ -27,7 +28,7 @@ module private Startup =
     let private SuperUserPasswordHash =
         "+eAhZRK85XUDQjEJ4HEwACNgCN607/BbfiWjcRjr4/WIyqGzMVhGlFtO7lhWSB9fwWzi4Nbzf74Kznm25WmSSw=="
 
-    let checkUsers (persistenceFactory: IPersistenceFactory, logger: ILogger) = async {
+    let checkUsersAsync (persistenceFactory: IPersistenceFactory, logger: ILogger) = async {
         logger.Information "...checking Users..."
 
         let reader = persistenceFactory.GetReader<User, UserEvent> None
@@ -97,7 +98,12 @@ type Startup(config) =
     let persistenceFactory =
         FilePersistenceFactory(config, PersistenceClock(), logger) :> IPersistenceFactory
 
-    do Startup.checkUsers (persistenceFactory, logger) |> Async.RunSynchronously
+    do
+        Migration(config, persistenceFactory, logger).MigrateAsync()
+        |> Async.RunSynchronously
+        |> ignore
+
+    // TEMP...do Startup.checkUsersAsync (persistenceFactory, logger) |> Async.RunSynchronously
 
     let todosApi ctx = {
         Shared.getTodos = fun () -> async { return Storage.todos |> List.ofSeq }

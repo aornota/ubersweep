@@ -22,3 +22,12 @@ type SquadEvent<'playerType> =
 
     interface IEvent with
         member this.EventJson = Json.toJson this
+
+type Squad<'group, 'playerType> = { // TODO: Implement this properly...
+    Dummy: unit
+} with
+
+    interface IState<Squad<'group, 'playerType>, SquadEvent<'playerType>> with
+        member this.SnapshotJson = Json.toJson this
+
+        member this.Evolve event = this

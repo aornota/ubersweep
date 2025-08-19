@@ -19,3 +19,12 @@ type PostEvent =
 
     interface IEvent with
         member this.EventJson = Json.toJson this
+
+type Post = { // TODO: Implement this properly...
+    Dummy: unit
+} with
+
+    interface IState<Post, PostEvent> with
+        member this.SnapshotJson = Json.toJson this
+
+        member this.Evolve event = this

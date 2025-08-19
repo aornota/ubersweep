@@ -3,19 +3,18 @@ namespace Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Server.Common
 
 open Microsoft.Extensions.Configuration
-open Serilog
 open System
 open System.Collections.Concurrent
 
-type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, logger: ILogger) =
+type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, logger) =
     [<Literal>]
-    let rootKey = "FilePersistence:Root"
+    let relativeRootKey = "FilePersistence:RelativeRoot"
 
     [<Literal>]
     let snapshotFrequencyKey = "FilePersistence:SnapshotFrequency"
 
     [<Literal>]
-    let defaultRoot = "persisted"
+    let defaultRelativeRoot = "persisted"
 
     let defaultSnapshotFrequency: uint option = None
 
@@ -29,22 +28,23 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
     let root, isConfiguredRoot =
         let pair =
             try
-                let root = config[rootKey]
+                let root = config[relativeRootKey]
 
                 if String.IsNullOrWhiteSpace root then
-                    defaultRoot, false
+                    defaultRelativeRoot, false
                 else
                     root, true
             with _ ->
-                defaultRoot, false
+                defaultRelativeRoot, false
 
         $@".\{fst pair}", snd pair
 
     do
-        let template =
-            $"Using {configuredOrDefault isConfiguredRoot} persistence root: {{root}}"
-
-        logger.Information(template, root)
+        logger.Information(
+            "Using {configuredOrDefault} persistence root: {root}",
+            configuredOrDefault isConfiguredRoot,
+            root
+        )
 
     let snapshotFrequency, isConfiguredSnapshotFrequency =
         try
@@ -72,15 +72,18 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
             | Some snapshotFrequency -> $"every {int snapshotFrequency} revisions"
             | None -> "no snapshotting"
 
-        let template =
-            $"Using {configuredOrDefault isConfiguredSnapshotFrequency} snapshot frequency: {{description}}"
-
-        logger.Information(template, description)
+        logger.Information(
+            "Using {configuredOrDefault} snapshot frequency: {description}",
+            configuredOrDefault isConfiguredSnapshotFrequency,
+            description
+        )
 
     let dic =
         ConcurrentDictionary<PartitionName option * EntityName, IReader * IWriter>()
 
-    let getOrAdd (partitionName, entityName) =
+    let getOrAdd (partitionName, typeName: string) =
+        let entityName = typeName.Split('`')[0]
+
         dic.GetOrAdd(
             (partitionName, entityName),
             (fun _ ->

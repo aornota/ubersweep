@@ -25,3 +25,12 @@ type FixtureEvent<'matchEvent> =
 
     interface IEvent with
         member this.EventJson = Json.toJson this
+
+type Fixture<'stage, 'unconfirmed, 'matchEvent> = { // TODO: Implement this properly...
+    Dummy: unit
+} with
+
+    interface IState<Fixture<'stage, 'unconfirmed, 'matchEvent>, FixtureEvent<'matchEvent>> with
+        member this.SnapshotJson = Json.toJson this
+
+        member this.Evolve event = this
