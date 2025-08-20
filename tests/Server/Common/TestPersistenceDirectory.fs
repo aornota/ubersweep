@@ -47,17 +47,20 @@ type TestPersistenceDirectory<'id, 'state, 'initEvent, 'event
     member _.ReadAsync guid = reader.ReadAsync guid
     member _.ReadAllAsync() = reader.ReadAllAsync()
 
-    member _.WriteAsync(entity: Entity<'id, 'state, 'event>, event: 'initEvent, auditUserId: UserId) =
-        writer.WriteAsync(entity.Id.Guid, entity.Rvn, auditUserId, event, (fun _ -> entity.SnapshotJson))
+    member _.CreateFromSnapshotAsync(guid, rvn, snapshotJson) =
+        writer.CreateFromSnapshotAsync(guid, rvn, snapshotJson)
 
-    member _.WriteAsync(entity: Entity<'id, 'state, 'event>, event: 'event, auditUserId: UserId) =
-        writer.WriteAsync(entity.Id.Guid, entity.Rvn, auditUserId, event, (fun _ -> entity.SnapshotJson))
+    member _.WriteEventAsync(entity: Entity<'id, 'state, 'event>, event: 'initEvent, auditUserId: UserId) =
+        writer.WriteEventAsync(entity.Guid, entity.Rvn, auditUserId, event, Some(fun _ -> entity.SnapshotJson))
 
-    member _.WriteAsync(guid, rvn, event: 'initEvent, auditUserId: UserId, snapshotJson) =
-        writer.WriteAsync(guid, rvn, auditUserId, event, (fun _ -> snapshotJson))
+    member _.WriteEventAsync(entity: Entity<'id, 'state, 'event>, event: 'event, auditUserId: UserId) =
+        writer.WriteEventAsync(entity.Guid, entity.Rvn, auditUserId, event, Some(fun _ -> entity.SnapshotJson))
 
-    member _.WriteAsync(guid, rvn, event: 'event, auditUserId: UserId, snapshotJson) =
-        writer.WriteAsync(guid, rvn, auditUserId, event, (fun _ -> snapshotJson))
+    member _.WriteEventAsync(guid, rvn, event: 'initEvent, auditUserId: UserId, snapshotJson) =
+        writer.WriteEventAsync(guid, rvn, auditUserId, event, Some(fun _ -> snapshotJson))
+
+    member _.WriteEventAsync(guid, rvn, event: 'event, auditUserId: UserId, snapshotJson) =
+        writer.WriteEventAsync(guid, rvn, auditUserId, event, Some(fun _ -> snapshotJson))
 
     member _.TryReadAllLinesAsync(guid: Guid) = asyncResult {
         try

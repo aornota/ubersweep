@@ -25,7 +25,9 @@ type IReader =
     abstract ReadAllAsync: unit -> Async<Result<Guid * NonEmptyList<Entry>, string> list>
 
 type IWriter =
-    abstract WriteAsync: Guid * Rvn * UserId * IEvent * GetSnapshot -> Async<Result<unit, string>>
+    // TODO: ArchiveAllAsync? WriteEventsAsync?...
+    abstract CreateFromSnapshotAsync: Guid * Rvn * Json -> Async<Result<unit, string>>
+    abstract WriteEventAsync: Guid * Rvn * UserId * IEvent * GetSnapshot option -> Async<Result<unit, string>>
 
 type IPersistenceClock =
     abstract GetUtcNow: unit -> DateTime

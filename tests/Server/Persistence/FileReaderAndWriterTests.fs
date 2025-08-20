@@ -24,14 +24,14 @@ module FileReaderAndWriterTests =
                 match commandsPairs with
                 | (event, auditUserId) :: t ->
                     let! counter, event = counter |> Counter.apply event
-                    let! _ = testDir.WriteAsync(counter, event, auditUserId)
+                    let! _ = testDir.WriteEventAsync(counter, event, auditUserId)
                     return! apply t counter
                 | [] -> return counter
             }
 
             let counter, initEvent = Counter.helper.InitFromCommand(guid, fst initCommandPair)
 
-            let! _ = testDir.WriteAsync(counter, initEvent, snd initCommandPair)
+            let! _ = testDir.WriteEventAsync(counter, initEvent, snd initCommandPair)
 
             return! apply commandsPairs counter
         }
@@ -117,6 +117,70 @@ module FileReaderAndWriterTests =
                                 $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                                 $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                                 $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
+                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                            ]
+                        )
+
+                    return! testDir.ReadAsync guid
+                }
+
+                match result with
+                | Ok nonEmptyList ->
+                    let expectedNonEmptyList =
+                        NonEmptyList<Entry>
+                            .Create(
+                                SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
+                                [
+                                    EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
+                                ]
+                            )
+
+                    Expect.equal nonEmptyList expectedNonEmptyList $"Unexpected {nameof Ok} {nameof result}"
+                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+            }
+            testAsync "Read (initial snapshot entry) with partitiion" {
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
+
+                let guid = Guid.NewGuid()
+
+                let! result = asyncResult {
+                    let! _ =
+                        testDir.TryWriteAllLinesAsync(
+                            guid,
+                            [ """["SnapshotJson",["Rvn",1],["Json","{\"Count\":1}"]]""" ]
+                        )
+
+                    return! testDir.ReadAsync guid
+                }
+
+                match result with
+                | Ok nonEmptyList ->
+                    let expectedNonEmptyList =
+                        NonEmptyList<Entry>
+                            .Create(
+                                SnapshotJson(
+                                    Rvn.InitialRvn,
+                                    ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson
+                                ),
+                                []
+                            )
+
+                    Expect.equal nonEmptyList expectedNonEmptyList $"Unexpected {nameof Ok} {nameof result}"
+                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+            }
+            testAsync "Read (initial snapshot entry and subsequent event) with no partitiion" {
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
+                let guid = Guid.NewGuid()
+
+                let! result = asyncResult {
+                    let! _ =
+                        testDir.TryWriteAllLinesAsync(
+                            guid,
+                            [
                                 """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
                                 $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
@@ -246,7 +310,82 @@ module FileReaderAndWriterTests =
                     Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
-            testAsync "Write (initial event entry) with no partition" {
+            testAsync "Read all (initial snapshot entry; initial snapshot entry and subsequent event) with no partition" {
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
+                let guid1 = Guid.Empty // use empty Guid to ensure deterministic ordering of result
+                let guid2 = Guid.NewGuid()
+
+                let! result = asyncResult {
+                    let! _ =
+                        testDir.TryWriteAllLinesAsync(
+                            guid1,
+                            [ """["SnapshotJson",["Rvn",1],["Json","{\"Count\":1}"]]""" ]
+                        )
+
+
+                    let! _ =
+                        testDir.TryWriteAllLinesAsync(
+                            guid2,
+                            [
+                                """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
+                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                            ]
+                        )
+
+                    return! testDir.ReadAllAsync()
+                }
+
+                match result with
+                | Ok list ->
+                    let expectedList = [
+                        Ok(
+                            guid1,
+                            NonEmptyList<Entry>
+                                .Create(
+                                    SnapshotJson(
+                                        Rvn.InitialRvn,
+                                        ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson
+                                    ),
+                                    []
+                                )
+                        )
+                        Ok(
+                            guid2,
+                            NonEmptyList<Entry>
+                                .Create(
+                                    SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
+                                    [
+                                        EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
+                                    ]
+                                )
+                        )
+                    ]
+
+                    Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
+                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+            }
+            testAsync "Create from snapshot with partition" {
+                use testDir =
+                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
+
+                let guid = Guid.NewGuid()
+
+                let! result = asyncResult {
+                    let! _ = testDir.CreateFromSnapshotAsync(guid, Rvn 69u, Json """{"Count":666}""")
+
+                    return! testDir.TryReadAllLinesAsync guid
+                }
+
+                match result with
+                | Ok lines ->
+                    let expectedLines = [ """["SnapshotJson",["Rvn",69],["Json","{\"Count\":666}"]]""" ]
+
+                    Expect.equal lines expectedLines $"Unexpected {nameof Ok} {nameof result}"
+                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+            }
+            testAsync "Write event (initial event entry) with no partition" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
@@ -254,7 +393,13 @@ module FileReaderAndWriterTests =
 
                 let! result = asyncResult {
                     let! _ =
-                        testDir.WriteAsync(guid, Rvn.InitialRvn, Initialized -1, auditUser1Id, Json """{"Count":-1}""")
+                        testDir.WriteEventAsync(
+                            guid,
+                            Rvn.InitialRvn,
+                            Initialized -1,
+                            auditUser1Id,
+                            Json """{"Count":-1}"""
+                        )
 
                     return! testDir.TryReadAllLinesAsync guid
                 }
@@ -268,7 +413,7 @@ module FileReaderAndWriterTests =
                     Expect.equal lines expectedLines $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
-            testAsync "Write (multiple event entries) with partition" {
+            testAsync "Write event (multiple event entries) with partition" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
 
@@ -276,10 +421,16 @@ module FileReaderAndWriterTests =
 
                 let! result = asyncResult {
                     let! _ =
-                        testDir.WriteAsync(guid, Rvn.InitialRvn, Initialized -1, auditUser1Id, Json """{"Count":-1}""")
+                        testDir.WriteEventAsync(
+                            guid,
+                            Rvn.InitialRvn,
+                            Initialized -1,
+                            auditUser1Id,
+                            Json """{"Count":-1}"""
+                        )
 
-                    let! _ = testDir.WriteAsync(guid, Rvn 2u, Incremented, auditUser1Id, Json """{"Count":0}""")
-                    let! _ = testDir.WriteAsync(guid, Rvn 3u, Incremented, auditUser2Id, Json """{"Count":1}""")
+                    let! _ = testDir.WriteEventAsync(guid, Rvn 2u, Incremented, auditUser1Id, Json """{"Count":0}""")
+                    let! _ = testDir.WriteEventAsync(guid, Rvn 3u, Incremented, auditUser2Id, Json """{"Count":1}""")
 
                     return! testDir.TryReadAllLinesAsync guid
                 }
@@ -295,7 +446,7 @@ module FileReaderAndWriterTests =
                     Expect.equal lines expectedLines $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
-            testAsync "Write (initial event entry; multiple entries with snapshot) with no partition" {
+            testAsync "Write event (initial event entry; multiple entries with snapshot) with no partition" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, Some 3u)
 
@@ -303,14 +454,26 @@ module FileReaderAndWriterTests =
 
                 let! result = asyncResult {
                     let! _ =
-                        testDir.WriteAsync(guid1, Rvn.InitialRvn, Initialized -1, auditUser1Id, Json """{"Count":-1}""")
+                        testDir.WriteEventAsync(
+                            guid1,
+                            Rvn.InitialRvn,
+                            Initialized -1,
+                            auditUser1Id,
+                            Json """{"Count":-1}"""
+                        )
 
                     let! _ =
-                        testDir.WriteAsync(guid2, Rvn.InitialRvn, Initialized -1, auditUser1Id, Json """{"Count":-1}""")
+                        testDir.WriteEventAsync(
+                            guid2,
+                            Rvn.InitialRvn,
+                            Initialized -1,
+                            auditUser1Id,
+                            Json """{"Count":-1}"""
+                        )
 
-                    let! _ = testDir.WriteAsync(guid2, Rvn 2u, Incremented, auditUser1Id, Json """{"Count":0}""")
-                    let! _ = testDir.WriteAsync(guid2, Rvn 3u, Incremented, auditUser2Id, Json """{"Count":1}""")
-                    let! _ = testDir.WriteAsync(guid2, Rvn 4u, Incremented, auditUser1Id, Json """{"Count":2}""")
+                    let! _ = testDir.WriteEventAsync(guid2, Rvn 2u, Incremented, auditUser1Id, Json """{"Count":0}""")
+                    let! _ = testDir.WriteEventAsync(guid2, Rvn 3u, Incremented, auditUser2Id, Json """{"Count":1}""")
+                    let! _ = testDir.WriteEventAsync(guid2, Rvn 4u, Incremented, auditUser1Id, Json """{"Count":2}""")
 
                     let! lines1 = testDir.TryReadAllLinesAsync guid1
                     let! lines2 = testDir.TryReadAllLinesAsync guid2
@@ -398,7 +561,7 @@ module FileReaderAndWriterTests =
                 | Error error ->
                     Expect.equal
                         error
-                        $"At least one entry caused a deserialization error when reading {guid} for {testDir.PathForError} (e.g. Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EventJason in Aornota.Ubersweep.Server.Persistence.{nameof Entry})"
+                        $"At least one line caused a deserialization error when reading {guid} for {testDir.PathForError} (e.g. Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EventJason in Aornota.Ubersweep.Server.Persistence.{nameof Entry})"
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when event revision inconsistent with previous entry revision" {
@@ -481,30 +644,6 @@ module FileReaderAndWriterTests =
                     Expect.equal
                         error
                         $"Consistency check failed when reading {guid} for {testDir.PathForError}: {nameof SnapshotJson} with {Rvn 1u} but previous {nameof Entry} was also {nameof SnapshotJson}"
-                        $"{nameof Error} is not the expected error"
-            }
-            testAsync "Read when snapshot but no previous entry" {
-                use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
-
-                let guid = Guid.NewGuid()
-
-                let! result = asyncResult {
-                    let! _ =
-                        testDir.TryWriteAllLinesAsync(
-                            guid,
-                            [ """["SnapshotJson",["Rvn",1],["Json","{\"Count\":2}"]]""" ]
-                        )
-
-                    return! testDir.ReadAsync guid
-                }
-
-                match result with
-                | Ok _ -> Expect.isError result $"{nameof result} should be {nameof Error}"
-                | Error error ->
-                    Expect.equal
-                        error
-                        $"Consistency check failed when reading {guid} for {testDir.PathForError}: {nameof SnapshotJson} with {Rvn 1u} but no previous {nameof Entry}"
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read all when at least one file with non-Guid name exists" {
@@ -629,7 +768,7 @@ module FileReaderAndWriterTests =
                                 )
                         )
                         Error
-                            $"At least one entry caused a deserialization error when reading {guidError} for {testDir.PathForError} (e.g. Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EventJason in Aornota.Ubersweep.Server.Persistence.{nameof Entry})"
+                            $"At least one line caused a deserialization error when reading {guidError} for {testDir.PathForError} (e.g. Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EventJason in Aornota.Ubersweep.Server.Persistence.{nameof Entry})"
                     ]
 
                     Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
@@ -779,52 +918,27 @@ module FileReaderAndWriterTests =
                     Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
-            testAsync "Read all when file exists with snapshot but no previous entry" {
+            testAsync "Create from snapshot when file already exists" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
-                let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
-                let guidError = Guid.NewGuid()
+                let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
-                    // Create both valid and invalid files so can check result includes both.
+                    let! _ = testDir.TryWriteAllLinesAsync(guid, [])
 
-                    let! _ =
-                        testDir.TryWriteAllLinesAsync(
-                            guidOk,
-                            [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                            ]
-                        )
-
-                    let! _ =
-                        testDir.TryWriteAllLinesAsync(
-                            guidError,
-                            [ """["SnapshotJson",["Rvn",1],["Json","{\"Count\":2}"]]""" ]
-                        )
-
-                    return! testDir.ReadAllAsync()
+                    return! testDir.CreateFromSnapshotAsync(guid, Rvn 5u, Json """{"Count":-1}""")
                 }
 
                 match result with
-                | Ok list ->
-                    let expectedList = [
-                        Ok(
-                            guidOk,
-                            NonEmptyList<Entry>
-                                .Create(
-                                    EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
-                                    []
-                                )
-                        )
-                        Error
-                            $"Consistency check failed when reading {guidError} for {testDir.PathForError}: {nameof SnapshotJson} with {Rvn 1u} but no previous {nameof Entry}"
-                    ]
-
-                    Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
-                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+                | Ok _ -> Expect.isError result $"{nameof result} should be {nameof Error}"
+                | Error error ->
+                    Expect.equal
+                        error
+                        $"File already exists when creating from snapshot for {Rvn 5u} for {guid} in {testDir.PathForError}"
+                        $"{nameof Error} is not the expected error"
             }
-            testAsync "Write initial revision when file already exists" {
+            testAsync "Write event (initial revision) when file already exists" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
@@ -834,7 +948,13 @@ module FileReaderAndWriterTests =
                     let! _ = testDir.TryWriteAllLinesAsync(guid, [])
 
                     return!
-                        testDir.WriteAsync(guid, Rvn.InitialRvn, Initialized -1, auditUser1Id, Json """{"Count":-1}""")
+                        testDir.WriteEventAsync(
+                            guid,
+                            Rvn.InitialRvn,
+                            Initialized -1,
+                            auditUser1Id,
+                            Json """{"Count":-1}"""
+                        )
                 }
 
                 match result with
@@ -842,17 +962,17 @@ module FileReaderAndWriterTests =
                 | Error error ->
                     Expect.equal
                         error
-                        $"File already exists when writing initial {Rvn.InitialRvn} for {guid} in {testDir.PathForError}"
+                        $"File already exists when writing event for initial {Rvn.InitialRvn} for {guid} in {testDir.PathForError}"
                         $"{nameof Error} is not the expected error"
             }
-            testAsync "Write non-initial revision when file does not exist" {
+            testAsync "Write event (non-initial revision) when file does not exist" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
                 let! result = asyncResult {
-                    return! testDir.WriteAsync(guid, Rvn 2u, Incremented, auditUser1Id, Json """{"Count":0}""")
+                    return! testDir.WriteEventAsync(guid, Rvn 2u, Incremented, auditUser1Id, Json """{"Count":0}""")
                 }
 
                 match result with
@@ -860,10 +980,10 @@ module FileReaderAndWriterTests =
                 | Error error ->
                     Expect.equal
                         error
-                        $"File does not exist when writing non-initial {Rvn 2u} for {guid} in {testDir.PathForError}"
+                        $"File does not exist when writing event for non-initial {Rvn 2u} for {guid} in {testDir.PathForError}"
                         $"{nameof Error} is not the expected error"
             }
-            testAsync "Write non-initial revision when file exists but is empty" {
+            testAsync "Write event (non-initial revision) when file exists but is empty" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
@@ -872,7 +992,7 @@ module FileReaderAndWriterTests =
                 let! result = asyncResult {
                     let! _ = testDir.TryWriteAllLinesAsync(guid, [])
 
-                    return! testDir.WriteAsync(guid, Rvn 2u, Incremented, auditUser1Id, Json """{"Count":0}""")
+                    return! testDir.WriteEventAsync(guid, Rvn 2u, Incremented, auditUser1Id, Json """{"Count":0}""")
                 }
 
                 match result with
@@ -880,10 +1000,10 @@ module FileReaderAndWriterTests =
                 | Error error ->
                     Expect.equal
                         error
-                        $"File exists but is empty when writing non-initial {Rvn 2u} for {guid} in {testDir.PathForError}"
+                        $"File exists but is empty when writing event for non-initial {Rvn 2u} for {guid} in {testDir.PathForError}"
                         $"{nameof Error} is not the expected error"
             }
-            testAsync "Write when revision inconsistent with previous entry revision" {
+            testAsync "Write event when revision inconsistent with previous entry revision" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
@@ -898,7 +1018,7 @@ module FileReaderAndWriterTests =
                             ]
                         )
 
-                    return! testDir.WriteAsync(guid, Rvn 3u, Incremented, auditUser1Id, Json """{"Count":0}""")
+                    return! testDir.WriteEventAsync(guid, Rvn 3u, Incremented, auditUser1Id, Json """{"Count":0}""")
                 }
 
                 match result with
@@ -906,10 +1026,10 @@ module FileReaderAndWriterTests =
                 | Error error ->
                     Expect.equal
                         error
-                        $"Previous {nameof Entry} ({Rvn 1u}) not consistent when writing {Rvn 3u} for {guid} in {testDir.PathForError}"
+                        $"Previous {nameof Entry} ({Rvn 1u}) not consistent when writing event for {Rvn 3u} for {guid} in {testDir.PathForError}"
                         $"{nameof Error} is not the expected error"
             }
-            testAsync "Write when deserialization error for last entry" {
+            testAsync "Write event when deserialization error for last entry" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
@@ -925,7 +1045,7 @@ module FileReaderAndWriterTests =
                             ]
                         )
 
-                    return! testDir.WriteAsync(guid, Rvn 3u, Incremented, auditUser1Id, Json """{"Count":0}""")
+                    return! testDir.WriteEventAsync(guid, Rvn 3u, Incremented, auditUser1Id, Json """{"Count":0}""")
                 }
 
                 match result with
@@ -933,14 +1053,14 @@ module FileReaderAndWriterTests =
                 | Error error ->
                     Expect.equal
                         error
-                        $"Deserialization error for last entry when writing {Rvn 3u} for {guid} in {testDir.PathForError}: Error at: `$[1]`\010The following `failure` occurred with the decoder: Cannot find case Revision in Aornota.Ubersweep.Shared.Common.Rvn"
+                        $"Deserialization error for last entry when writing event for {Rvn 3u} for {guid} in {testDir.PathForError}: Error at: `$[1]`\010The following `failure` occurred with the decoder: Cannot find case Revision in Aornota.Ubersweep.Shared.Common.Rvn"
                         $"{nameof Error} is not the expected error"
             }
         ]
 
     let private integration =
         testList "integration" [
-            testAsync "Write multiple entities (without snapshots) and read (separately) with no partition" {
+            testAsync "Write multiple events (without snapshots) and read (separately) with no partition" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
@@ -1006,7 +1126,7 @@ module FileReaderAndWriterTests =
                     Expect.equal actual2 expected2 $"{nameof actual2} should equal {nameof expected2}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
-            testAsync "Write multiple entities (with snapshots) and read (all) with partition" {
+            testAsync "Write multiple events (with snapshots) and read (all) with partition" {
                 use testDir =
                     new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(
                         Some "2026",

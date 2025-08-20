@@ -56,12 +56,12 @@ module private Startup =
             let writer = persistenceFactory.GetWriter<User, UserEvent> None
 
             let! result =
-                writer.WriteAsync(
+                writer.WriteEventAsync(
                     superUser.Guid,
                     Rvn.InitialRvn,
                     superUser.Id,
                     initEvent,
-                    fun _ -> superUser.SnapshotJson
+                    Some(fun _ -> superUser.SnapshotJson)
                 )
 
             match result with

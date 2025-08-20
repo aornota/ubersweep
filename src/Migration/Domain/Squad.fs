@@ -7,7 +7,7 @@ type SquadId =
 
     static member Create() = Guid.NewGuid() |> SquadId
 
-type Seeding = Seeding of seeding: int
+type Seeding = Seeding of seeding: uint32
 
 type PlayerId =
     | PlayerId of guid: Guid

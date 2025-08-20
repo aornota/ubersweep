@@ -24,4 +24,4 @@ type Group8 =
     | GroupG
     | GroupH
 
-type DraftOrdinal = DraftOrdinal of draftOrdinal: int
+type DraftOrdinal = DraftOrdinal of draftOrdinal: uint32
