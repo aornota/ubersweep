@@ -19,13 +19,16 @@ open System
 
 module private Startup =
     [<Literal>]
-    let private SuperUserName = "superuser"
+    let private superUserGuid = "ffffffff-ffff-ffff-ffff-ffffffffffff"
 
     [<Literal>]
-    let private SuperUserPasswordSalt = "CHQSX6YO/AM/Tm21txBUwSs5+8FcPFriq8HRKo7yDGA="
+    let private superUserName = "superuser"
 
     [<Literal>]
-    let private SuperUserPasswordHash =
+    let private superUserPasswordSalt = "CHQSX6YO/AM/Tm21txBUwSs5+8FcPFriq8HRKo7yDGA="
+
+    [<Literal>]
+    let private superUserPasswordHash =
         "+eAhZRK85XUDQjEJ4HEwACNgCN607/BbfiWjcRjr4/WIyqGzMVhGlFtO7lhWSB9fwWzi4Nbzf74Kznm25WmSSw=="
 
     let checkUsersAsync (persistenceFactory: IPersistenceFactory, logger: ILogger) = async {
@@ -49,9 +52,9 @@ module private Startup =
             logger.Information("...creating {type} because no Users exist...", SuperUser)
 
             let initEvent =
-                UserCreated(SuperUserName, SuperUserPasswordSalt, SuperUserPasswordHash, SuperUser)
+                UserCreated(superUserName, superUserPasswordSalt, superUserPasswordHash, SuperUser)
 
-            let superUser = User.helper.InitFromEvent(Guid.Empty, initEvent)
+            let superUser = User.helper.InitFromEvent(Guid superUserGuid, initEvent)
 
             let writer = persistenceFactory.GetWriter<User, UserEvent> None
 
@@ -59,7 +62,7 @@ module private Startup =
                 writer.WriteEventAsync(
                     superUser.Guid,
                     Rvn.InitialRvn,
-                    superUser.Id,
+                    UserId.FromGuid(Guid AgentUser.agentUserGuid),
                     initEvent,
                     Some(fun _ -> superUser.SnapshotJson)
                 )
@@ -98,6 +101,7 @@ type Startup(config) =
     let persistenceFactory =
         FilePersistenceFactory(config, PersistenceClock(), logger) :> IPersistenceFactory
 
+    (* TEMP... *)
     do
         Migration(config, persistenceFactory, logger).MigrateAsync()
         |> Async.RunSynchronously

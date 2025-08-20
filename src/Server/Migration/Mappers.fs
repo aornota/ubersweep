@@ -9,7 +9,7 @@ open Aornota.Ubersweep.Shared.Entities
 type MapUserId = Domain.UserId -> UserId
 
 [<AutoOpen>]
-module Migration =
+module Mappers =
     let private mapDraftId (Domain.DraftId guid) = DraftId.FromGuid guid
     let private mapFixtureId (Domain.FixtureId guid) = FixtureId.FromGuid guid
     let private mapMatchEventId (Domain.MatchEventId guid) = MatchEventId.FromGuid guid
@@ -101,10 +101,7 @@ module Migration =
         | Domain.Pleb -> Pleb
         | Domain.PersonaNonGrata -> PersonaNonGrata
 
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapDraftEvents (events: Event<Events.DraftEvent> list, mapUserId: MapUserId) =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
+    let mapDraftEvents (events: Event<Events.DraftEvent> list, mapUserId: MapUserId) =
         let mapDraftType =
             function
             | Domain.Constrained(starts, ends) -> Constrained(starts, ends)
@@ -163,14 +160,11 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapFixtureEventsEuro
+    let mapFixtureEventsEuro
         (
             events: Event<Events.FixtureEvent<Domain.StageEuro, Domain.UnconfirmedEuro, Domain.MatchEventFootball>> list,
             mapUserId: MapUserId
         ) =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
         let mapStageEuro =
             function
             | Domain.StageEuro.Group group -> StageEuro.Group(mapGroup6 group)
@@ -208,14 +202,11 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapFixtureEventsFifa
+    let mapFixtureEventsFifa
         (
             events: Event<Events.FixtureEvent<Domain.StageFifa, Domain.UnconfirmedFifa, Domain.MatchEventFootball>> list,
             mapUserId: MapUserId
         ) =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
         let mapUnconfirmedFifa =
             function
             | Domain.UnconfirmedFifa.Winner stage -> Winner(mapStageFifa stage)
@@ -245,15 +236,12 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapFixtureEventsFifaV2
+    let mapFixtureEventsFifaV2
         (
             events:
                 Event<Events.FixtureEvent<Domain.StageFifa, Domain.UnconfirmedFifaV2, Domain.MatchEventFootball>> list,
             mapUserId: MapUserId
         ) =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
         let mapUnconfirmedFifaV2 =
             function
             | Domain.UnconfirmedFifaV2.Winner stage -> Winner(mapStageFifa stage)
@@ -283,13 +271,11 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    let private mapFixtureEventsRwc
+    let mapFixtureEventsRwc
         (
             events: Event<Events.FixtureEvent<Domain.StageRwc, Domain.UnconfirmedRwc, Domain.MatchEventRugby>> list,
             mapUserId: MapUserId
         ) =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
         let mapMatchEventRugby matchEvent =
             let mapKickOutcome =
                 function
@@ -347,10 +333,7 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapPostEvents (events: Event<Events.NewsEvent> list, mapUserId: MapUserId) =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
+    let mapPostEvents (events: Event<Events.NewsEvent> list, mapUserId: MapUserId) =
         let mapPostType =
             function
             | Domain.Standard -> Standard
@@ -367,12 +350,9 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapSquadEventsEuro
+    let mapSquadEventsEuro
         (events: Event<Events.SquadEvent<Domain.Group6, Domain.PlayerTypeFootball>> list, mapUserId: MapUserId)
         =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
         events
         |> List.map (fun event ->
             let mappedEvent =
@@ -391,12 +371,9 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapSquadEventsFifa
+    let mapSquadEventsFifa
         (events: Event<Events.SquadEvent<Domain.Group8, Domain.PlayerTypeFootball>> list, mapUserId: MapUserId)
         =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
         events
         |> List.map (fun event ->
             let mappedEvent =
@@ -415,12 +392,9 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapSquadEventsRwc
+    let mapSquadEventsRwc
         (events: Event<Events.SquadEvent<Domain.Group4, Domain.PlayerTypeRugby>> list, mapUserId: MapUserId)
         =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
         let mapPlayerTypeRugby =
             function
             | Domain.PlayerTypeRugby.Forward -> Forward
@@ -444,34 +418,7 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    (*
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapUserEvents (events: Event<Events.UserEvent> list, mapUserId: MapUserId) =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
-        events
-        |> List.map (fun event ->
-            let mappedEvent =
-                match event.Event with
-                | Events.UserCreated(_,
-                                     Events.UserName userName,
-                                     Events.Salt passwordSalt,
-                                     Events.Hash passwordHash,
-                                     userType) ->
-                    UserCreated(userName, passwordSalt, passwordSalt, mapUserType userType) :> IEvent
-                | Events.PasswordChanged(_, Events.Salt passwordSalt, Events.Hash passwordHash) ->
-                    PasswordChanged(passwordSalt, passwordHash)
-                | Events.PasswordReset(_, Events.Salt passwordSalt, Events.Hash passwordHash) ->
-                    UserEvent.PasswordReset(passwordSalt, passwordHash)
-                | Events.UserTypeChanged(_, userType) -> UserTypeChanged(mapUserType userType)
-
-            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
-    *)
-
-    // TODO-MIGRATION: Map UserIds properly...
-    let private mapUserDraftEvents (events: Event<Events.UserDraftEvent> list, mapUserId: MapUserId) =
-        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
-
+    let mapUserDraftEvents (events: Event<Events.UserDraftEvent> list, mapUserId: MapUserId) =
         let mapUserDraftPick =
             function
             | Domain.TeamPick sqaudId -> TeamPick(mapSquadId sqaudId)
@@ -495,7 +442,7 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    let private mapUser (user: Events.User) =
+    let mapUser (user: Events.User) =
         let mapMustChangePasswordReason =
             function
             | Domain.FirstSignIn -> FirstSignIn

@@ -12,6 +12,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />
+    <Compile Include="Common\AgentUser.fs" />
     <Compile Include="Common\Crypto.fs" />
     <Compile Include="Common\IEvent.fs" />
     <Compile Include="Common\IState.fs" />
