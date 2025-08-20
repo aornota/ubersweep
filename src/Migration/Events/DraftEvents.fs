@@ -179,7 +179,7 @@ type DraftHelper() =
             match draft.DraftStatus with
             | Processing ->
                 if draft.PickPriorities.ContainsKey userId then
-                    draft.PickPriorities.[userId] <- pickPriority
+                    draft.PickPriorities[userId] <- pickPriority
                 else
                     draft.PickPriorities.Add(userId, pickPriority)
 

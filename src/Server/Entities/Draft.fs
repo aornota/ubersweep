@@ -32,7 +32,7 @@ type DraftEvent =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type Draft = { // TODO: Implement this properly...
+type Draft = { // TODO-ENTITIES: Implement this properly...
     Dummy: unit
 } with
 

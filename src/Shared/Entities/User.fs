@@ -30,7 +30,7 @@ type UserInitCommand = CreateUser of userName: string * password: string * userT
 
 type UserCommand =
     | ChangeUserType of userType: UserType
-    // TODO: Should this have "existing" password?...
+    // TODO-ENTITIES: Should this have "existing" password?...
     | ChangePassword of password: string * confirmPassword: string
     | ResetPassword of password: string * confirmPassword: string
 

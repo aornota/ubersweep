@@ -26,7 +26,7 @@ type FixtureEvent<'matchEvent> =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type Fixture<'stage, 'unconfirmed, 'matchEvent> = { // TODO: Implement this properly...
+type Fixture<'stage, 'unconfirmed, 'matchEvent> = { // TODO-ENTITIES: Implement this properly...
     Dummy: unit
 } with
 

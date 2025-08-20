@@ -11,7 +11,7 @@ open System
 [<RequireQualifiedAccess>]
 module UserTests =
     let private happy =
-        // TODO: Review these...
+        // TODO-TESTS: Review these...
         testList "happy" [
             test "Initialize from command" {
                 let guid, userName, userType = Guid.NewGuid(), "admin", Administrator
@@ -90,8 +90,8 @@ module UserTests =
                         $"State.MustChangePasswordReason should be equal for {user} and {initialState}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
-        // TODO: Change password...
-        // TODO: Reset password...
+        // TODO-TESTS: Change password...
+        // TODO-TESTS: Reset password...
         ]
 
     let tests = testList $"{nameof User}" [ happy ]

@@ -5,7 +5,7 @@ open Farmer.Builders
 
 open Helpers
 
-// TODO: Add support for copying appsettings.production.json as appsettings.development.json if the latter does not exist?...
+// TODO-BUILD: Add support for copying appsettings.production.json as appsettings.development.json if the latter does not exist?...
 
 initializeContext ()
 

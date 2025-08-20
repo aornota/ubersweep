@@ -21,7 +21,7 @@ type UserDraftEvent =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type UserDraft = { // TODO: Implement this properly...
+type UserDraft = { // TODO-ENTITIES: Implement this properly...
     Dummy: unit
 } with
 

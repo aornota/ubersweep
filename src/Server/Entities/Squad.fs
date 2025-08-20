@@ -23,7 +23,7 @@ type SquadEvent<'playerType> =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type Squad<'group, 'playerType> = { // TODO: Implement this properly...
+type Squad<'group, 'playerType> = { // TODO-ENTITIES: Implement this properly...
     Dummy: unit
 } with
 

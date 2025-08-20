@@ -3,6 +3,10 @@ namespace Aornota.Ubersweep.Migration
 open Serilog
 open System.IO
 
+(* TODO-MIGRATION: Remove this - and:
+    -- remove OutputType and AutoGenerateBindingRedirects properties from Migration.fsproj...
+    -- remove WatchMigration target from Buiid.fs... *)
+
 module Main =
     [<EntryPoint>]
     let main _ =

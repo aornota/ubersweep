@@ -6,7 +6,7 @@ open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
 
-// TODO: Think about permissions...
+// TODO-ENTITIES: Think about permissions...
 
 type UserInitEvent =
     | UserCreated of userName: string * passwordSalt: string * passwordHash: string * userType: UserType

@@ -20,7 +20,7 @@ type PostEvent =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type Post = { // TODO: Implement this properly...
+type Post = { // TODO-ENTITIES: Implement this properly...
     Dummy: unit
 } with
 
