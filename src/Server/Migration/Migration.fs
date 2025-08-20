@@ -15,6 +15,7 @@ open System.IO
 module Migration =
     let private mapDraftId (Domain.DraftId guid) = DraftId.FromGuid guid
     let private mapFixtureId (Domain.FixtureId guid) = FixtureId.FromGuid guid
+    let private mapMatchEventId (Domain.MatchEventId guid) = MatchEventId.FromGuid guid
     let private mapPlayerId (Domain.PlayerId guid) = PlayerId.FromGuid guid
     let private mapSquadId (Domain.SquadId guid) = SquadId.FromGuid guid
 
@@ -45,10 +46,26 @@ module Migration =
         | Domain.Group8.GroupG -> GroupAToH.GroupG
         | Domain.Group8.GroupH -> GroupAToH.GroupH
 
-    let private mapSeeding =
-        function
-        | Some(Domain.Seeding seeding) -> Some(Seeding seeding)
-        | None -> None
+    let private mapMatchEventFootball matchEvent =
+        let mapPenaltyOutcome =
+            function
+            | Domain.Scored -> Scored
+            | Domain.Missed -> PenaltyOutcome.Missed
+            | Domain.Saved(squadId, playerId) -> Saved(mapSquadId squadId, mapPlayerId playerId)
+
+        match matchEvent with
+        | Domain.Goal(squadId, playerId, assistedBy) ->
+            Goal(mapSquadId squadId, mapPlayerId playerId, assistedBy |> Option.map mapPlayerId)
+        | Domain.OwnGoal(squadId, playerId) -> OwnGoal(mapSquadId squadId, mapPlayerId playerId)
+        | Domain.Penalty(squadId, playerId, penaltyOutcome) ->
+            Penalty(mapSquadId squadId, mapPlayerId playerId, mapPenaltyOutcome penaltyOutcome)
+        | Domain.YellowCard(squadId, playerId) ->
+            MatchEventFootball.YellowCard(mapSquadId squadId, mapPlayerId playerId)
+        | Domain.RedCard(squadId, playerId) -> MatchEventFootball.RedCard(mapSquadId squadId, mapPlayerId playerId)
+        | Domain.CleanSheet(squadId, playerId) -> CleanSheet(mapSquadId squadId, mapPlayerId playerId)
+        | Domain.PenaltyShootout(homeScore, awayScore) -> PenaltyShootout(homeScore, awayScore)
+        | Domain.ManOfTheMatch(squadId, playerId) ->
+            MatchEventFootball.ManOfTheMatch(mapSquadId squadId, mapPlayerId playerId)
 
     let private mapPlayerTypeFootabll =
         function
@@ -57,10 +74,28 @@ module Migration =
         | Domain.Midfielder -> Midfielder
         | Domain.Forward -> PlayerTypeFootball.Forward
 
-    let private mapPlayerTypeRugby =
+    let private mapRole =
         function
-        | Domain.PlayerTypeRugby.Forward -> Forward
-        | Domain.Back -> Back
+        | Domain.Home -> Home
+        | Domain.Away -> Away
+
+    let private mapSeeding =
+        function
+        | Domain.Seeding seeding -> Seeding seeding
+
+    let private mapParticipant mapUnconfirmed =
+        function
+        | Domain.Confirmed squadId -> Confirmed(mapSquadId squadId)
+        | Domain.Unconfirmed unconfirmed -> Unconfirmed(mapUnconfirmed unconfirmed)
+
+    let private mapStageFifa =
+        function
+        | Domain.StageFifa.Group group -> StageFifa.Group(mapGroup8 group)
+        | Domain.StageFifa.RoundOf16 matchNumber -> RoundOf16 matchNumber
+        | Domain.StageFifa.QuarterFinal quarterFinalOrdinal -> StageFifa.QuarterFinal quarterFinalOrdinal
+        | Domain.StageFifa.SemiFinal semiFinalOrdinal -> StageFifa.SemiFinal semiFinalOrdinal
+        | Domain.StageFifa.ThirdPlacePlayOff -> ThirdPlacePlayOff
+        | Domain.StageFifa.Final -> StageFifa.Final
 
     let private mapUserType =
         function
@@ -131,7 +166,189 @@ module Migration =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    // TODO: mapFixtureEvents[Euro|Fifa[V2]|Rwc]...
+    // TODO: Map UserIds properly...
+    let private mapFixtureEventsEuro
+        (
+            events: Event<Events.FixtureEvent<Domain.StageEuro, Domain.UnconfirmedEuro, Domain.MatchEventFootball>> list,
+            userMapper
+        ) =
+        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
+
+        let mapStageEuro =
+            function
+            | Domain.StageEuro.Group group -> StageEuro.Group(mapGroup6 group)
+            | Domain.StageEuro.RoundOf16 matchNumber -> StageEuro.RoundOf16 matchNumber
+            | Domain.StageEuro.QuarterFinal quarterFinalOrdinal -> StageEuro.QuarterFinal quarterFinalOrdinal
+            | Domain.StageEuro.SemiFinal semiFinalOrdinal -> StageEuro.SemiFinal semiFinalOrdinal
+            | Domain.StageEuro.Final -> StageEuro.Final
+
+        let mapUnconfirmedEuro =
+            function
+            | Domain.UnconfirmedEuro.Winner stage -> UnconfirmedEuro.Winner(mapStageEuro stage)
+            | Domain.UnconfirmedEuro.RunnerUp group -> UnconfirmedEuro.RunnerUp(mapGroup6 group)
+            | Domain.UnconfirmedEuro.ThirdPlace groups -> UnconfirmedEuro.ThirdPlace(groups |> List.map mapGroup6)
+
+        let mapParticipantEuro = mapParticipant mapUnconfirmedEuro
+
+        events
+        |> List.map (fun event ->
+            let mappedEvent =
+                match event.Event with
+                | Events.FixtureCreated(_, stage, homeParticipant, awayParticipant, kickOff) ->
+                    FixtureCreated(
+                        mapStageEuro stage,
+                        mapParticipantEuro homeParticipant,
+                        mapParticipantEuro awayParticipant,
+                        kickOff
+                    )
+                    :> IEvent
+                | Events.ParticipantConfirmed(_, role, squadId) ->
+                    ParticipantConfirmed(mapRole role, mapSquadId squadId)
+                | Events.MatchEventAdded(_, matchEventId, matchEvent) ->
+                    MatchEventAdded(mapMatchEventId matchEventId, mapMatchEventFootball matchEvent)
+                | Events.MatchEventRemoved(_, matchEventId) -> MatchEventRemoved(mapMatchEventId matchEventId)
+                | Events.FixtureCancelled _ -> FixtureCancelled
+
+            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
+
+    // TODO: Map UserIds properly...
+    let private mapFixtureEventsFifa
+        (
+            events: Event<Events.FixtureEvent<Domain.StageFifa, Domain.UnconfirmedFifa, Domain.MatchEventFootball>> list,
+            userMapper
+        ) =
+        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
+
+        let mapUnconfirmedFifa =
+            function
+            | Domain.UnconfirmedFifa.Winner stage -> Winner(mapStageFifa stage)
+            | Domain.UnconfirmedFifa.RunnerUp group -> RunnerUp(mapGroup8 group)
+            | Domain.UnconfirmedFifa.Loser semiFinalOrdinal -> Loser(StageFifa.SemiFinal semiFinalOrdinal)
+
+        let mapParticipantFifa = mapParticipant mapUnconfirmedFifa
+
+        events
+        |> List.map (fun event ->
+            let mappedEvent =
+                match event.Event with
+                | Events.FixtureCreated(_, stage, homeParticipant, awayParticipant, kickOff) ->
+                    FixtureCreated(
+                        mapStageFifa stage,
+                        mapParticipantFifa homeParticipant,
+                        mapParticipantFifa awayParticipant,
+                        kickOff
+                    )
+                    :> IEvent
+                | Events.ParticipantConfirmed(_, role, squadId) ->
+                    ParticipantConfirmed(mapRole role, mapSquadId squadId)
+                | Events.MatchEventAdded(_, matchEventId, matchEvent) ->
+                    MatchEventAdded(mapMatchEventId matchEventId, mapMatchEventFootball matchEvent)
+                | Events.MatchEventRemoved(_, matchEventId) -> MatchEventRemoved(mapMatchEventId matchEventId)
+                | Events.FixtureCancelled _ -> FixtureCancelled
+
+            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
+
+    // TODO: Map UserIds properly...
+    let private mapFixtureEventsFifaV2
+        (
+            events:
+                Event<Events.FixtureEvent<Domain.StageFifa, Domain.UnconfirmedFifaV2, Domain.MatchEventFootball>> list,
+            userMapper
+        ) =
+        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
+
+        let mapUnconfirmedFifaV2 =
+            function
+            | Domain.UnconfirmedFifaV2.Winner stage -> Winner(mapStageFifa stage)
+            | Domain.UnconfirmedFifaV2.RunnerUp group -> RunnerUp(mapGroup8 group)
+            | Domain.UnconfirmedFifaV2.Loser stage -> Loser(mapStageFifa stage)
+
+        let mapParticipantFifa = mapParticipant mapUnconfirmedFifaV2
+
+        events
+        |> List.map (fun event ->
+            let mappedEvent =
+                match event.Event with
+                | Events.FixtureCreated(_, stage, homeParticipant, awayParticipant, kickOff) ->
+                    FixtureCreated(
+                        mapStageFifa stage,
+                        mapParticipantFifa homeParticipant,
+                        mapParticipantFifa awayParticipant,
+                        kickOff
+                    )
+                    :> IEvent
+                | Events.ParticipantConfirmed(_, role, squadId) ->
+                    ParticipantConfirmed(mapRole role, mapSquadId squadId)
+                | Events.MatchEventAdded(_, matchEventId, matchEvent) ->
+                    MatchEventAdded(mapMatchEventId matchEventId, mapMatchEventFootball matchEvent)
+                | Events.MatchEventRemoved(_, matchEventId) -> MatchEventRemoved(mapMatchEventId matchEventId)
+                | Events.FixtureCancelled _ -> FixtureCancelled
+
+            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
+
+    let private mapFixtureEventsRwc
+        (
+            events: Event<Events.FixtureEvent<Domain.StageRwc, Domain.UnconfirmedRwc, Domain.MatchEventRugby>> list,
+            userMapper
+        ) =
+        let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
+
+        let mapMatchEventRugby matchEvent =
+            let mapKickOutcome =
+                function
+                | Domain.Successful -> Successful
+                | Domain.KickOutcome.Missed -> Missed
+
+            match matchEvent with
+            | Domain.Try(squadId, playerId) -> Try(mapSquadId squadId, mapPlayerId playerId)
+            | Domain.PenaltyTry squadId -> PenaltyTry(mapSquadId squadId)
+            | Domain.PenaltyKick(squadId, playerId, kickOutcome) ->
+                PenaltyKick(mapSquadId squadId, mapPlayerId playerId, mapKickOutcome kickOutcome)
+            | Domain.Conversion(squadId, playerId, kickOutcome) ->
+                Conversion(mapSquadId squadId, mapPlayerId playerId, mapKickOutcome kickOutcome)
+            | Domain.DropGoal(squadId, playerId) -> DropGoal(mapSquadId squadId, mapPlayerId playerId)
+            | Domain.MatchEventRugby.YellowCard(squadId, playerId) ->
+                YellowCard(mapSquadId squadId, mapPlayerId playerId)
+            | Domain.MatchEventRugby.RedCard(squadId, playerId) -> RedCard(mapSquadId squadId, mapPlayerId playerId)
+            | Domain.MatchEventRugby.ManOfTheMatch(squadId, playerId) ->
+                ManOfTheMatch(mapSquadId squadId, mapPlayerId playerId)
+
+        let mapStageRwc =
+            function
+            | Domain.StageRwc.Group group -> Group(mapGroup4 group)
+            | Domain.StageRwc.QuarterFinal quarterFinalOrdinal -> QuarterFinal quarterFinalOrdinal
+            | Domain.StageRwc.SemiFinal semiFinalOrdinal -> SemiFinal semiFinalOrdinal
+            | Domain.StageRwc.BronzeFinal -> BronzeFinal
+            | Domain.StageRwc.Final -> Final
+
+        let mapUnconfirmedRwc =
+            function
+            | Domain.UnconfirmedRwc.GroupRunnerUp group -> RunnerUp(mapGroup4 group)
+            | Domain.UnconfirmedRwc.StageWinner stage -> Winner(mapStageRwc stage)
+            | Domain.UnconfirmedRwc.SemiFinalLoser semiFinalOrdinal -> Loser(SemiFinal semiFinalOrdinal)
+
+        let mapParticipantRwc = mapParticipant mapUnconfirmedRwc
+
+        events
+        |> List.map (fun event ->
+            let mappedEvent =
+                match event.Event with
+                | Events.FixtureCreated(_, stage, homeParticipant, awayParticipant, kickOff) ->
+                    FixtureCreated(
+                        mapStageRwc stage,
+                        mapParticipantRwc homeParticipant,
+                        mapParticipantRwc awayParticipant,
+                        kickOff
+                    )
+                    :> IEvent
+                | Events.ParticipantConfirmed(_, role, squadId) ->
+                    ParticipantConfirmed(mapRole role, mapSquadId squadId)
+                | Events.MatchEventAdded(_, matchEventId, matchEvent) ->
+                    MatchEventAdded(mapMatchEventId matchEventId, mapMatchEventRugby matchEvent)
+                | Events.MatchEventRemoved(_, matchEventId) -> MatchEventRemoved(mapMatchEventId matchEventId)
+                | Events.FixtureCancelled _ -> FixtureCancelled
+
+            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
     // TODO: Map UserIds properly...
     let private mapPostEvents (events: Event<Events.NewsEvent> list, userMapper) =
@@ -164,7 +381,7 @@ module Migration =
             let mappedEvent =
                 match event.Event with
                 | Events.SquadCreated(_, Events.SquadName squadName, group, seeding, Events.CoachName coachName) ->
-                    SquadCreated(squadName, mapGroup6 group, mapSeeding seeding, coachName) :> IEvent
+                    SquadCreated(squadName, mapGroup6 group, seeding |> Option.map mapSeeding, coachName) :> IEvent
                 | Events.PlayerAdded(_, playerId, Events.PlayerName playerName, playerType) ->
                     PlayerAdded(mapPlayerId playerId, playerName, mapPlayerTypeFootabll playerType)
                 | Events.PlayerNameChanged(_, playerId, Events.PlayerName playerName) ->
@@ -188,7 +405,7 @@ module Migration =
             let mappedEvent =
                 match event.Event with
                 | Events.SquadCreated(_, Events.SquadName squadName, group, seeding, Events.CoachName coachName) ->
-                    SquadCreated(squadName, mapGroup8 group, mapSeeding seeding, coachName) :> IEvent
+                    SquadCreated(squadName, mapGroup8 group, seeding |> Option.map mapSeeding, coachName) :> IEvent
                 | Events.PlayerAdded(_, playerId, Events.PlayerName playerName, playerType) ->
                     PlayerAdded(mapPlayerId playerId, playerName, mapPlayerTypeFootabll playerType)
                 | Events.PlayerNameChanged(_, playerId, Events.PlayerName playerName) ->
@@ -207,12 +424,17 @@ module Migration =
         =
         let mapUserId (Domain.UserId guid) = UserId.FromGuid guid // TEMP
 
+        let mapPlayerTypeRugby =
+            function
+            | Domain.PlayerTypeRugby.Forward -> Forward
+            | Domain.Back -> Back
+
         events
         |> List.map (fun event ->
             let mappedEvent =
                 match event.Event with
                 | Events.SquadCreated(_, Events.SquadName squadName, group, seeding, Events.CoachName coachName) ->
-                    SquadCreated(squadName, mapGroup4 group, mapSeeding seeding, coachName) :> IEvent
+                    SquadCreated(squadName, mapGroup4 group, seeding |> Option.map mapSeeding, coachName) :> IEvent
                 | Events.PlayerAdded(_, playerId, Events.PlayerName playerName, playerType) ->
                     PlayerAdded(mapPlayerId playerId, playerName, mapPlayerTypeRugby playerType)
                 | Events.PlayerNameChanged(_, playerId, Events.PlayerName playerName) ->
@@ -277,15 +499,14 @@ module Migration =
     let private mapUser (user: Events.User) =
         let mapMustChangePasswordReason =
             function
-            | Some Domain.FirstSignIn -> Some FirstSignIn
-            | Some Domain.PasswordReset -> Some PasswordReset
-            | None -> None
+            | Domain.FirstSignIn -> FirstSignIn
+            | Domain.PasswordReset -> PasswordReset
 
         {
             UserCommon = {
                 UserName = user.UserName
                 UserType = mapUserType user.UserType
-                MustChangePasswordReason = mapMustChangePasswordReason user.MustChangePasswordReason
+                MustChangePasswordReason = user.MustChangePasswordReason |> Option.map mapMustChangePasswordReason
             }
             PasswordSalt = user.PasswordSalt
             PasswordHash = user.PasswordHash
@@ -446,25 +667,63 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         // TODO: Improve / abstract this...
 
         let! _ =
-            this.CheckPartitionAsync<GroupAToH, StageFifa, UnconfirmedFifa, PlayerTypeFootball, MatchEventFootball>
+            this.CheckPartitionAsync<
+                GroupAToH,
+                StageFifa,
+                Unconfirmed<StageFifa, GroupAToH>,
+                PlayerTypeFootball,
+                MatchEventFootball
+             >
                 "2018-fifa"
 
         let! _ =
-            this.CheckPartitionAsync<GroupAToD, StageRwc, UnconfirmedRwc, PlayerTypeRugby, MatchEventRugby> "2019-rwc"
+            this.CheckPartitionAsync<
+                GroupAToD,
+                StageRwc,
+                Unconfirmed<StageRwc, GroupAToD>,
+                PlayerTypeRugby,
+                MatchEventRugby
+             >
+                "2019-rwc"
 
         let! _ =
-            this.CheckPartitionAsync<GroupAToF, StageEuro, UnconfirmedEuro, PlayerTypeFootball, MatchEventFootball>
+            this.CheckPartitionAsync<
+                GroupAToF,
+                StageEuro,
+                Unconfirmed<StageEuro, GroupAToF>,
+                PlayerTypeFootball,
+                MatchEventFootball
+             >
                 "2021-euro"
 
         let! _ =
-            this.CheckPartitionAsync<GroupAToH, StageFifa, UnconfirmedFifa, PlayerTypeFootball, MatchEventFootball>
+            this.CheckPartitionAsync<
+                GroupAToH,
+                StageFifa,
+                Unconfirmed<StageFifa, GroupAToH>,
+                PlayerTypeFootball,
+                MatchEventFootball
+             >
                 "2022-fifa"
 
         let! _ =
-            this.CheckPartitionAsync<GroupAToD, StageRwc, UnconfirmedRwc, PlayerTypeRugby, MatchEventRugby> "2023-rwc"
+            this.CheckPartitionAsync<
+                GroupAToD,
+                StageRwc,
+                Unconfirmed<StageRwc, GroupAToD>,
+                PlayerTypeRugby,
+                MatchEventRugby
+             >
+                "2023-rwc"
 
         let! _ =
-            this.CheckPartitionAsync<GroupAToF, StageEuro, UnconfirmedEuro, PlayerTypeFootball, MatchEventFootball>
+            this.CheckPartitionAsync<
+                GroupAToF,
+                StageEuro,
+                Unconfirmed<StageEuro, GroupAToF>,
+                PlayerTypeFootball,
+                MatchEventFootball
+             >
                 "2024-euro"
 
         let fifa2018 = Partition.fifa2018 (Path.Combine(root, "2018-fifa"), logger)

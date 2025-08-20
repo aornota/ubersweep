@@ -59,15 +59,10 @@ type UnconfirmedEuro =
     | RunnerUp of group: GroupAToF
     | ThirdPlace of groups: GroupAToF list
 
-type UnconfirmedFifa =
-    | Winner of stage: StageFifa
-    | RunnerUp of group: GroupAToH
-    | Loser of stage: StageFifa
-
-type UnconfirmedRwc =
-    | Winner of stage: StageRwc
-    | RunnerUp of group: GroupAToD
-    | Loser of stage: StageRwc
+type Unconfirmed<'stage, 'group> =
+    | Winner of stage: 'stage
+    | RunnerUp of group: 'group
+    | Loser of stage: 'stage
 
 type Participant<'unconfirmed> =
     | Confirmed of squadId: SquadId
