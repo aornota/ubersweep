@@ -44,7 +44,7 @@ type private UserMapper(userLists: (Guid * Events.User * Rvn) list list) =
             else
                 failwith $"Unable to map {userId}"
 
-type private PartitionHelper<'group, 'stage, 'playerType, 'matchEvent, 'legacyUnconfirmed, 'legacyMatchEvent>
+type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEvent, 'legacyUnconfirmed, 'legacyMatchEvent>
     (
         root: string,
         partitionName: PartitionName,
@@ -52,12 +52,13 @@ type private PartitionHelper<'group, 'stage, 'playerType, 'matchEvent, 'legacyUn
         mapFixtureEvents:
             Event<Events.FixtureEvent<'stage, 'legacyUnconfirmed, 'legacyMatchEvent>> list * MapUserId
                 -> (Rvn * DateTime * IEvent * UserId) list,
+        // TODO...mapFixture: Events.Fixture<'stage, 'legacyUnconfirmed, 'legacyMatchEvent> -> Fixture<'stage, 'unconfirmed, 'matchEvent>,
         mapSquad: Events.Squad<'group, 'playerType> -> Squad<'group, 'playerType>,
         persistenceFactory: IPersistenceFactory,
         logger
     ) =
     let logger =
-        SourcedLogger.Create<PartitionHelper<_, _, _, _, _, _>>(partitionName, logger)
+        SourcedLogger.Create<PartitionHelper<_, _, _, _, _, _, _>>(partitionName, logger)
 
     let partition = getPartition (Path.Combine(root, partitionName), logger)
 
@@ -74,10 +75,7 @@ type private PartitionHelper<'group, 'stage, 'playerType, 'matchEvent, 'legacyUn
                 Ok()
 
         let reader =
-            persistenceFactory.GetReader<
-                Fixture<'stage, Unconfirmed<'stage, 'group>, 'matchEvent>,
-                FixtureEvent<'matchEvent>
-             >(
+            persistenceFactory.GetReader<Fixture<'stage, 'unconfirmed, 'matchEvent>, FixtureEvent<'matchEvent>>(
                 Some partitionName
             )
 
@@ -361,6 +359,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToH,
                 StageFifa,
+                Unconfirmed<StageFifa, GroupAToH>,
                 PlayerTypeFootball,
                 MatchEventFootball,
                 Domain.UnconfirmedFifa,
@@ -370,6 +369,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 "2018-fifa",
                 Partition.fifa2018,
                 mapFixtureEventsFifa,
+                // TODO...mapFixtureFifa,
                 mapSquadFifa,
                 persistenceFactory,
                 logger
@@ -379,6 +379,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToD,
                 StageRwc,
+                Unconfirmed<StageRwc, GroupAToD>,
                 PlayerTypeRugby,
                 MatchEventRugby,
                 Domain.UnconfirmedRwc,
@@ -388,6 +389,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 "2019-rwc",
                 Partition.rwc2019,
                 mapFixtureEventsRwc,
+                // TODO...mapFixtureRwc,
                 mapSquadRwc,
                 persistenceFactory,
                 logger
@@ -397,6 +399,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToF,
                 StageEuro,
+                UnconfirmedEuro,
                 PlayerTypeFootball,
                 MatchEventFootball,
                 Domain.UnconfirmedEuro,
@@ -406,6 +409,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 "2021-euro",
                 Partition.euro2021,
                 mapFixtureEventsEuro,
+                // TODO...mapFixtureEuro,
                 mapSquadEuro,
                 persistenceFactory,
                 logger
@@ -415,6 +419,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToH,
                 StageFifa,
+                Unconfirmed<StageFifa, GroupAToH>,
                 PlayerTypeFootball,
                 MatchEventFootball,
                 Domain.UnconfirmedFifaV2,
@@ -424,6 +429,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 "2022-fifa",
                 Partition.fifa2022,
                 mapFixtureEventsFifaV2,
+                // TODO...mapFixtureFifaV2,
                 mapSquadFifa,
                 persistenceFactory,
                 logger
@@ -433,6 +439,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToD,
                 StageRwc,
+                Unconfirmed<StageRwc, GroupAToD>,
                 PlayerTypeRugby,
                 MatchEventRugby,
                 Domain.UnconfirmedRwc,
@@ -442,6 +449,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 "2023-rwc",
                 Partition.rwc2023,
                 mapFixtureEventsRwc,
+                // TODO...mapFixtureRwc,
                 mapSquadRwc,
                 persistenceFactory,
                 logger
@@ -451,6 +459,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToF,
                 StageEuro,
+                UnconfirmedEuro,
                 PlayerTypeFootball,
                 MatchEventFootball,
                 Domain.UnconfirmedEuro,
@@ -460,6 +469,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 "2024-euro",
                 Partition.euro2024,
                 mapFixtureEventsEuro,
+                // TODO...mapFixtureEuro,
                 mapSquadEuro,
                 persistenceFactory,
                 logger
