@@ -42,15 +42,6 @@ module Mappers =
         | Domain.Confirmed squadId -> Confirmed(mapSquadId squadId)
         | Domain.Unconfirmed unconfirmed -> Unconfirmed(mapUnconfirmed unconfirmed)
 
-    let private mapStageFifa =
-        function
-        | Domain.StageFifa.Group group -> StageFifa.Group group
-        | Domain.StageFifa.RoundOf16 matchNumber -> RoundOf16 matchNumber
-        | Domain.StageFifa.QuarterFinal quarterFinalOrdinal -> StageFifa.QuarterFinal quarterFinalOrdinal
-        | Domain.StageFifa.SemiFinal semiFinalOrdinal -> StageFifa.SemiFinal semiFinalOrdinal
-        | Domain.StageFifa.ThirdPlacePlayOff -> ThirdPlacePlayOff
-        | Domain.StageFifa.Final -> StageFifa.Final
-
     let mapDraftEvents (events: Event<Events.DraftEvent> list, mapUserId: MapUserId) =
         let mapDraftPick =
             function
@@ -107,20 +98,12 @@ module Mappers =
 
     let mapFixtureEventsEuro
         (
-            events: Event<Events.FixtureEvent<Domain.StageEuro, Domain.UnconfirmedEuro, Domain.MatchEventFootball>> list,
+            events: Event<Events.FixtureEvent<StageEuro, Domain.UnconfirmedEuro, Domain.MatchEventFootball>> list,
             mapUserId: MapUserId
         ) =
-        let mapStageEuro =
-            function
-            | Domain.StageEuro.Group group -> StageEuro.Group group
-            | Domain.StageEuro.RoundOf16 matchNumber -> StageEuro.RoundOf16 matchNumber
-            | Domain.StageEuro.QuarterFinal quarterFinalOrdinal -> StageEuro.QuarterFinal quarterFinalOrdinal
-            | Domain.StageEuro.SemiFinal semiFinalOrdinal -> StageEuro.SemiFinal semiFinalOrdinal
-            | Domain.StageEuro.Final -> StageEuro.Final
-
         let mapUnconfirmedEuro =
             function
-            | Domain.UnconfirmedEuro.Winner stage -> UnconfirmedEuro.Winner(mapStageEuro stage)
+            | Domain.UnconfirmedEuro.Winner stage -> UnconfirmedEuro.Winner stage
             | Domain.UnconfirmedEuro.RunnerUp group -> UnconfirmedEuro.RunnerUp group
             | Domain.UnconfirmedEuro.ThirdPlace groups -> UnconfirmedEuro.ThirdPlace groups
 
@@ -132,7 +115,7 @@ module Mappers =
                 match event.Event with
                 | Events.FixtureCreated(_, stage, homeParticipant, awayParticipant, kickOff) ->
                     FixtureCreated(
-                        mapStageEuro stage,
+                        stage,
                         mapParticipantEuro homeParticipant,
                         mapParticipantEuro awayParticipant,
                         kickOff
@@ -148,12 +131,12 @@ module Mappers =
 
     let mapFixtureEventsFifa
         (
-            events: Event<Events.FixtureEvent<Domain.StageFifa, Domain.UnconfirmedFifa, Domain.MatchEventFootball>> list,
+            events: Event<Events.FixtureEvent<StageFifa, Domain.UnconfirmedFifa, Domain.MatchEventFootball>> list,
             mapUserId: MapUserId
         ) =
         let mapUnconfirmedFifa =
             function
-            | Domain.UnconfirmedFifa.Winner stage -> Winner(mapStageFifa stage)
+            | Domain.UnconfirmedFifa.Winner stage -> Winner stage
             | Domain.UnconfirmedFifa.RunnerUp group -> RunnerUp group
             | Domain.UnconfirmedFifa.Loser semiFinalOrdinal -> Loser(StageFifa.SemiFinal semiFinalOrdinal)
 
@@ -165,7 +148,7 @@ module Mappers =
                 match event.Event with
                 | Events.FixtureCreated(_, stage, homeParticipant, awayParticipant, kickOff) ->
                     FixtureCreated(
-                        mapStageFifa stage,
+                        stage,
                         mapParticipantFifa homeParticipant,
                         mapParticipantFifa awayParticipant,
                         kickOff
@@ -181,15 +164,14 @@ module Mappers =
 
     let mapFixtureEventsFifaV2
         (
-            events:
-                Event<Events.FixtureEvent<Domain.StageFifa, Domain.UnconfirmedFifaV2, Domain.MatchEventFootball>> list,
+            events: Event<Events.FixtureEvent<StageFifa, Domain.UnconfirmedFifaV2, Domain.MatchEventFootball>> list,
             mapUserId: MapUserId
         ) =
         let mapUnconfirmedFifaV2 =
             function
-            | Domain.UnconfirmedFifaV2.Winner stage -> Winner(mapStageFifa stage)
+            | Domain.UnconfirmedFifaV2.Winner stage -> Winner stage
             | Domain.UnconfirmedFifaV2.RunnerUp group -> RunnerUp group
-            | Domain.UnconfirmedFifaV2.Loser stage -> Loser(mapStageFifa stage)
+            | Domain.UnconfirmedFifaV2.Loser stage -> Loser stage
 
         let mapParticipantFifa = mapParticipant mapUnconfirmedFifaV2
 
@@ -199,7 +181,7 @@ module Mappers =
                 match event.Event with
                 | Events.FixtureCreated(_, stage, homeParticipant, awayParticipant, kickOff) ->
                     FixtureCreated(
-                        mapStageFifa stage,
+                        stage,
                         mapParticipantFifa homeParticipant,
                         mapParticipantFifa awayParticipant,
                         kickOff
@@ -215,22 +197,17 @@ module Mappers =
 
     let mapFixtureEventsRwc
         (
-            events: Event<Events.FixtureEvent<Domain.StageRwc, Domain.UnconfirmedRwc, Domain.MatchEventRugby>> list,
+            events: Event<Events.FixtureEvent<StageRwc, Domain.UnconfirmedRwc, Domain.MatchEventRugby>> list,
             mapUserId: MapUserId
         ) =
         let mapMatchEventRugby matchEvent =
-            let mapKickOutcome =
-                function
-                | Domain.Successful -> Successful
-                | Domain.KickOutcome.Missed -> Missed
-
             match matchEvent with
             | Domain.Try(squadId, playerId) -> Try(mapSquadId squadId, mapPlayerId playerId)
             | Domain.PenaltyTry squadId -> PenaltyTry(mapSquadId squadId)
             | Domain.PenaltyKick(squadId, playerId, kickOutcome) ->
-                PenaltyKick(mapSquadId squadId, mapPlayerId playerId, mapKickOutcome kickOutcome)
+                PenaltyKick(mapSquadId squadId, mapPlayerId playerId, kickOutcome)
             | Domain.Conversion(squadId, playerId, kickOutcome) ->
-                Conversion(mapSquadId squadId, mapPlayerId playerId, mapKickOutcome kickOutcome)
+                Conversion(mapSquadId squadId, mapPlayerId playerId, kickOutcome)
             | Domain.DropGoal(squadId, playerId) -> DropGoal(mapSquadId squadId, mapPlayerId playerId)
             | Domain.MatchEventRugby.YellowCard(squadId, playerId) ->
                 YellowCard(mapSquadId squadId, mapPlayerId playerId)
@@ -238,18 +215,10 @@ module Mappers =
             | Domain.MatchEventRugby.ManOfTheMatch(squadId, playerId) ->
                 ManOfTheMatch(mapSquadId squadId, mapPlayerId playerId)
 
-        let mapStageRwc =
-            function
-            | Domain.StageRwc.Group group -> Group group
-            | Domain.StageRwc.QuarterFinal quarterFinalOrdinal -> QuarterFinal quarterFinalOrdinal
-            | Domain.StageRwc.SemiFinal semiFinalOrdinal -> SemiFinal semiFinalOrdinal
-            | Domain.StageRwc.BronzeFinal -> BronzeFinal
-            | Domain.StageRwc.Final -> Final
-
         let mapUnconfirmedRwc =
             function
             | Domain.UnconfirmedRwc.GroupRunnerUp group -> RunnerUp group
-            | Domain.UnconfirmedRwc.StageWinner stage -> Winner(mapStageRwc stage)
+            | Domain.UnconfirmedRwc.StageWinner stage -> Winner stage
             | Domain.UnconfirmedRwc.SemiFinalLoser semiFinalOrdinal -> Loser(SemiFinal semiFinalOrdinal)
 
         let mapParticipantRwc = mapParticipant mapUnconfirmedRwc
@@ -260,7 +229,7 @@ module Mappers =
                 match event.Event with
                 | Events.FixtureCreated(_, stage, homeParticipant, awayParticipant, kickOff) ->
                     FixtureCreated(
-                        mapStageRwc stage,
+                        stage,
                         mapParticipantRwc homeParticipant,
                         mapParticipantRwc awayParticipant,
                         kickOff

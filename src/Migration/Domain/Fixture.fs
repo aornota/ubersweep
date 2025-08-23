@@ -1,6 +1,8 @@
 namespace Aornota.Ubersweep.Migration.Domain
 
 open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
+open Aornota.Ubersweep.Migration.Domain // after Aornota.Ubersweep.Shared.Entities to ensure migration types used when exist in both
 
 open System
 
@@ -8,28 +10,6 @@ type FixtureId =
     | FixtureId of guid: Guid
 
     static member Create() = Guid.NewGuid() |> FixtureId
-
-type StageEuro =
-    | Group of group: GroupAToF
-    | RoundOf16 of matchNumber: uint32
-    | QuarterFinal of quarterFinalOrdinal: uint32
-    | SemiFinal of semiFinalOrdinal: uint32
-    | Final
-
-type StageFifa =
-    | Group of group: GroupAToH
-    | RoundOf16 of matchNumber: uint32
-    | QuarterFinal of quarterFinalOrdinal: uint32
-    | SemiFinal of semiFinalOrdinal: uint32
-    | ThirdPlacePlayOff
-    | Final
-
-type StageRwc =
-    | Group of group: GroupAToD
-    | QuarterFinal of quarterFinalOrdinal: uint32
-    | SemiFinal of semiFinalOrdinal: uint32
-    | BronzeFinal
-    | Final
 
 type UnconfirmedEuro =
     | Winner of stage: StageEuro
@@ -74,10 +54,6 @@ type MatchEventFootball =
     | CleanSheet of squadId: SquadId * playerId: PlayerId
     | PenaltyShootout of homeScore: uint32 * awayScore: uint32
     | ManOfTheMatch of squadId: SquadId * playerId: PlayerId
-
-type KickOutcome =
-    | Successful
-    | Missed
 
 type MatchEventRugby =
     | Try of squadId: SquadId * playerId: PlayerId
