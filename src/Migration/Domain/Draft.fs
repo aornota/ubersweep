@@ -1,24 +1,13 @@
 namespace Aornota.Ubersweep.Migration.Domain
 
+open Aornota.Ubersweep.Shared.Common
+
 open System
 
 type DraftId =
     | DraftId of guid: Guid
 
     static member Create() = Guid.NewGuid() |> DraftId
-
-type DraftType =
-    | Constrained of starts: DateTimeOffset * ends: DateTimeOffset
-    | Unconstrained
-
-type DraftStatus =
-    | PendingOpen of starts: DateTimeOffset * ends: DateTimeOffset
-    | Opened of ends: DateTimeOffset
-    | PendingProcessing
-    | Processing
-    | Processed
-    | PendingFreeSelection
-    | FreeSelection
 
 type DraftPick =
     | TeamPicked of squadId: SquadId
@@ -38,7 +27,3 @@ type ProcessingEvent =
     | ContestedPick of draftPick: DraftPick * userDetails: (UserId * uint32 * float option) list * winner: UserId
     | PickPriorityChanged of userId: UserId * pickPriority: uint32
     | Picked of draftOrdinal: DraftOrdinal * draftPick: DraftPick * userId: UserId * timestamp: DateTimeOffset
-
-type PriorityChange =
-    | Increase
-    | Decrease

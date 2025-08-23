@@ -44,6 +44,4 @@ type PlayerStatus =
     | Active
     | Withdrawn of dateWithdrawn: DateTimeOffset option
 
-type DraftOrdinal = DraftOrdinal of draftOrdinal: uint32
-
 type PickedBy = UserId * DraftOrdinal option * DateTimeOffset

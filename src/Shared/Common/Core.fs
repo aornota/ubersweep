@@ -23,3 +23,5 @@ type GroupAToH =
     | GroupF
     | GroupG
     | GroupH
+
+type DraftOrdinal = DraftOrdinal of draftOrdinal: uint32

@@ -38,7 +38,14 @@ type TestPersistenceDirectory<'id, 'state, 'initEvent, 'event
             dir.Create()
 
     let agent =
-        new FileReaderAndWriter(root, partitionName, entityName, snapshotFrequency, FixedClock.instance, Log.Logger)
+        new FileReaderAndWriterLegacy(
+            root,
+            partitionName,
+            entityName,
+            snapshotFrequency,
+            FixedClock.instance,
+            Log.Logger
+        )
 
     let reader, writer = agent :> IReader, agent :> IWriter
 
@@ -65,7 +72,7 @@ type TestPersistenceDirectory<'id, 'state, 'initEvent, 'event
     member _.TryReadAllLinesAsync(guid: Guid) = asyncResult {
         try
             let file =
-                FileInfo(Path.Combine(path, $"{guid}.{FileReaderAndWriter.FileExtension}"))
+                FileInfo(Path.Combine(path, $"{guid}.{FileReaderAndWriterLegacy.FileExtension}"))
 
             if not (File.Exists file.FullName) then
                 return! Error $"File {file.Name} does not exist"
@@ -80,7 +87,7 @@ type TestPersistenceDirectory<'id, 'state, 'initEvent, 'event
     member _.TryWriteAllLinesAsync(name: string, lines: string list) = asyncResult {
         try
             let file =
-                FileInfo(Path.Combine(path, $"{name}.{FileReaderAndWriter.FileExtension}"))
+                FileInfo(Path.Combine(path, $"{name}.{FileReaderAndWriterLegacy.FileExtension}"))
 
             if File.Exists file.FullName then
                 return! Error $"File {file.Name} already exists"

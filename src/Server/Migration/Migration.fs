@@ -44,24 +44,22 @@ type private UserMapper(userLists: (Guid * Events.User * Rvn) list list) =
             else
                 failwith $"Unable to map {userId}"
 
-type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEvent, 'legacyGroup, 'legacyStage, 'legacyUnconfirmed, 'legacyPlayerType, 'legacyMatchEvent>
+type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEvent, 'legacyStage, 'legacyUnconfirmed, 'legacyMatchEvent>
     (
         root: string,
         partitionName: PartitionName,
         getPartition:
-            string * ILogger
-                -> Partition<'legacyGroup, 'legacyStage, 'legacyUnconfirmed, 'legacyPlayerType, 'legacyMatchEvent>,
+            string * ILogger -> Partition<'group, 'legacyStage, 'legacyUnconfirmed, 'playerType, 'legacyMatchEvent>,
         mapFixtureEvents:
             Event<Events.FixtureEvent<'legacyStage, 'legacyUnconfirmed, 'legacyMatchEvent>> list * MapUserId
                 -> (Rvn * DateTime * IEvent * UserId) list,
         mapSquadEvents:
-            Event<Events.SquadEvent<'legacyGroup, 'legacyPlayerType>> list * MapUserId
-                -> (Rvn * DateTime * IEvent * UserId) list,
+            Event<Events.SquadEvent<'group, 'playerType>> list * MapUserId -> (Rvn * DateTime * IEvent * UserId) list,
         persistenceFactory: IPersistenceFactory,
         logger
     ) =
     let logger =
-        SourcedLogger.Create<PartitionHelper<_, _, _, _, _, _, _, _, _, _>>(partitionName, logger)
+        SourcedLogger.Create<PartitionHelper<_, _, _, _, _, _, _, _>>(partitionName, logger)
 
     let partition = getPartition (Path.Combine(root, partitionName), logger)
 
@@ -131,7 +129,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
     member _.ReadUsers() = partition.ReadUsers()
 
-    member _.Migrate(mapUserId: MapUserId) = asyncResult {
+    member _.MigrateAsync(mapUserId: MapUserId) = asyncResult {
         // TODO-MIGRATE: What to do about timestamp (since cannot currently pass to IReader.WriteEvent)?...
 
         let! drafts = partition.ReadDrafts()
@@ -307,7 +305,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
 
     let canMigrate = migrateOnStartUp && isConfiguredRoot
 
-    let writeUsers (users: (Guid * Events.User * Rvn) list) = asyncResult {
+    let writeUsersAsync (users: (Guid * Events.User * Rvn) list) = asyncResult {
         let users = users |> List.map (fun (guid, user, rvn) -> guid, mapUser user, rvn)
 
         let writer = persistenceFactory.GetWriter<User, UserEvent> None
@@ -323,7 +321,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         ()
     }
 
-    member this.MigrateAsync() = asyncResult {
+    member _.MigrateAsync() = asyncResult {
         let mapUsers (users: (Guid * Event<Events.UserEvent> list * Events.User * Rvn) list) =
             users |> List.map (fun (guid, _, user, rvn) -> guid, user, rvn)
 
@@ -364,10 +362,8 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 Unconfirmed<StageFifa, GroupAToH>,
                 PlayerTypeFootball,
                 MatchEventFootball,
-                Domain.Group8,
                 Domain.StageFifa,
                 Domain.UnconfirmedFifa,
-                Domain.PlayerTypeFootball,
                 Domain.MatchEventFootball
              >(
                 root,
@@ -386,10 +382,8 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 Unconfirmed<StageRwc, GroupAToD>,
                 PlayerTypeRugby,
                 MatchEventRugby,
-                Domain.Group4,
                 Domain.StageRwc,
                 Domain.UnconfirmedRwc,
-                Domain.PlayerTypeRugby,
                 Domain.MatchEventRugby
              >(
                 root,
@@ -408,10 +402,8 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 Unconfirmed<StageEuro, GroupAToF>,
                 PlayerTypeFootball,
                 MatchEventFootball,
-                Domain.Group6,
                 Domain.StageEuro,
                 Domain.UnconfirmedEuro,
-                Domain.PlayerTypeFootball,
                 Domain.MatchEventFootball
              >(
                 root,
@@ -430,10 +422,8 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 Unconfirmed<StageFifa, GroupAToH>,
                 PlayerTypeFootball,
                 MatchEventFootball,
-                Domain.Group8,
                 Domain.StageFifa,
                 Domain.UnconfirmedFifaV2,
-                Domain.PlayerTypeFootball,
                 Domain.MatchEventFootball
              >(
                 root,
@@ -452,10 +442,8 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 Unconfirmed<StageRwc, GroupAToD>,
                 PlayerTypeRugby,
                 MatchEventRugby,
-                Domain.Group4,
                 Domain.StageRwc,
                 Domain.UnconfirmedRwc,
-                Domain.PlayerTypeRugby,
                 Domain.MatchEventRugby
              >(
                 root,
@@ -474,10 +462,8 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 Unconfirmed<StageEuro, GroupAToF>,
                 PlayerTypeFootball,
                 MatchEventFootball,
-                Domain.Group6,
                 Domain.StageEuro,
                 Domain.UnconfirmedEuro,
-                Domain.PlayerTypeFootball,
                 Domain.MatchEventFootball
              >(
                 root,
@@ -516,14 +502,14 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
 
         let userMapper = UserMapper userLists
 
-        let! _ = helperFifa2018.Migrate(userMapper.MapperFor(sourceUserDic usersFifa2018))
-        let! _ = helperRwc2019.Migrate(userMapper.MapperFor(sourceUserDic usersRwc2019))
-        let! _ = helperEuro2021.Migrate(userMapper.MapperFor(sourceUserDic usersEuro2021))
-        let! _ = helperFifa2022.Migrate(userMapper.MapperFor(sourceUserDic usersFifa2022))
-        let! _ = helperRwc2023.Migrate(userMapper.MapperFor(sourceUserDic usersRwc2023))
-        let! _ = helperEuro2024.Migrate(userMapper.MapperFor(sourceUserDic usersEuro2024))
+        let! _ = helperFifa2018.MigrateAsync(userMapper.MapperFor(sourceUserDic usersFifa2018))
+        let! _ = helperRwc2019.MigrateAsync(userMapper.MapperFor(sourceUserDic usersRwc2019))
+        let! _ = helperEuro2021.MigrateAsync(userMapper.MapperFor(sourceUserDic usersEuro2021))
+        let! _ = helperFifa2022.MigrateAsync(userMapper.MapperFor(sourceUserDic usersFifa2022))
+        let! _ = helperRwc2023.MigrateAsync(userMapper.MapperFor(sourceUserDic usersRwc2023))
+        let! _ = helperEuro2024.MigrateAsync(userMapper.MapperFor(sourceUserDic usersEuro2024))
 
-        let! _ = writeUsers (userMapper.Users())
+        let! _ = writeUsersAsync (userMapper.Users())
 
         ()
     }

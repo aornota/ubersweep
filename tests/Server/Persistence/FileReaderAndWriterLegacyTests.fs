@@ -11,7 +11,7 @@ open FsToolkit.ErrorHandling
 open System
 
 [<RequireQualifiedAccess>]
-module FileReaderAndWriterTests =
+module FileReaderAndWriterTestsLegacy =
     let private initializeAndApply
         (
             guid,
@@ -661,7 +661,7 @@ module FileReaderAndWriterTests =
                 | Ok list ->
                     let expectedList = [
                         Error
-                            $"At least one .{FileReaderAndWriter.FileExtension} file in {testDir.PathForError} has a non-{nameof Guid} name (e.g. {name}.{FileReaderAndWriter.FileExtension})"
+                            $"At least one .{FileReaderAndWriterLegacy.FileExtension} file in {testDir.PathForError} has a non-{nameof Guid} name (e.g. {name}.{FileReaderAndWriterLegacy.FileExtension})"
                     ]
 
                     Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
@@ -1206,4 +1206,5 @@ module FileReaderAndWriterTests =
             }
         ]
 
-    let tests = testList $"{nameof FileReaderAndWriter}" [ happy; sad; integration ]
+    let tests =
+        testList $"{nameof FileReaderAndWriterLegacy}" [ happy; sad; integration ]

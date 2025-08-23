@@ -1,8 +1,9 @@
 namespace Aornota.Ubersweep.Migration.Events
 
 open Aornota.Ubersweep.Migration.Common
-open Aornota.Ubersweep.Migration.Domain
 open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
+open Aornota.Ubersweep.Migration.Domain // after Aornota.Ubersweep.Shared.Entities to ensure migration Ids used
 
 open System.Collections.Generic
 

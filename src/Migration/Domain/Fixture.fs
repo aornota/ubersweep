@@ -1,5 +1,7 @@
 namespace Aornota.Ubersweep.Migration.Domain
 
+open Aornota.Ubersweep.Shared.Common
+
 open System
 
 type FixtureId =
@@ -7,19 +9,15 @@ type FixtureId =
 
     static member Create() = Guid.NewGuid() |> FixtureId
 
-type Role =
-    | Home
-    | Away
-
 type StageEuro =
-    | Group of group: Group6
+    | Group of group: GroupAToF
     | RoundOf16 of matchNumber: uint32
     | QuarterFinal of quarterFinalOrdinal: uint32
     | SemiFinal of semiFinalOrdinal: uint32
     | Final
 
 type StageFifa =
-    | Group of group: Group8
+    | Group of group: GroupAToH
     | RoundOf16 of matchNumber: uint32
     | QuarterFinal of quarterFinalOrdinal: uint32
     | SemiFinal of semiFinalOrdinal: uint32
@@ -27,7 +25,7 @@ type StageFifa =
     | Final
 
 type StageRwc =
-    | Group of group: Group4
+    | Group of group: GroupAToD
     | QuarterFinal of quarterFinalOrdinal: uint32
     | SemiFinal of semiFinalOrdinal: uint32
     | BronzeFinal
@@ -35,21 +33,21 @@ type StageRwc =
 
 type UnconfirmedEuro =
     | Winner of stage: StageEuro
-    | RunnerUp of group: Group6
-    | ThirdPlace of groups: Group6 list
+    | RunnerUp of group: GroupAToF
+    | ThirdPlace of groups: GroupAToF list
 
 type UnconfirmedFifa =
     | Winner of stage: StageFifa
-    | RunnerUp of group: Group8
+    | RunnerUp of group: GroupAToH
     | Loser of semiFinalOrdinal: uint32
 
 type UnconfirmedFifaV2 =
     | Winner of stage: StageFifa
-    | RunnerUp of group: Group8
+    | RunnerUp of group: GroupAToH
     | Loser of stage: StageFifa
 
 type UnconfirmedRwc =
-    | GroupRunnerUp of group: Group4
+    | GroupRunnerUp of group: GroupAToD
     | StageWinner of stage: StageRwc
     | SemiFinalLoser of semiFinalOrdinal: uint32
 

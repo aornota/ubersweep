@@ -22,7 +22,7 @@ type private Input =
         getSnapsot: GetSnapshot option *
         reply: AsyncReplyChannel<Result<unit, string>>
 
-type FileReaderAndWriter
+type FileReaderAndWriterLegacy
     (
         root: string,
         partitionName: PartitionName option,
@@ -39,7 +39,7 @@ type FileReaderAndWriter
         | Some partitionName -> Path.Combine(partitionName, entityName)
         | None -> entityName
 
-    let logger = SourcedLogger.Create<FileReaderAndWriter>(subPath, logger)
+    let logger = SourcedLogger.Create<FileReaderAndWriterLegacy>(subPath, logger)
 
     let path = Path.Combine(root, subPath)
 

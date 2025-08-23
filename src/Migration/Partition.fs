@@ -1,8 +1,10 @@
 namespace Aornota.Ubersweep.Migration
 
 open Aornota.Ubersweep.Migration.Common
-open Aornota.Ubersweep.Migration.Domain
 open Aornota.Ubersweep.Migration.Events
+open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
+open Aornota.Ubersweep.Migration.Domain // after Aornota.Ubersweep.Shared.Entities to ensure migration types used when exist in both
 
 open FsToolkit.ErrorHandling
 open System.IO
@@ -120,19 +122,19 @@ type Partition<'group, 'stage, 'unconfirmed, 'playerType, 'matchEvent>(root, use
 [<RequireQualifiedAccess>]
 module Partition =
     let fifa2018 (root, logger) =
-        Partition<Group8, StageFifa, UnconfirmedFifa, PlayerTypeFootball, MatchEventFootball>(root, true, logger)
+        Partition<GroupAToH, StageFifa, UnconfirmedFifa, PlayerTypeFootball, MatchEventFootball>(root, true, logger)
 
     let rwc2019 (root, logger) =
-        Partition<Group4, StageRwc, UnconfirmedRwc, PlayerTypeRugby, MatchEventRugby>(root, false, logger)
+        Partition<GroupAToD, StageRwc, UnconfirmedRwc, PlayerTypeRugby, MatchEventRugby>(root, false, logger)
 
     let euro2021 (root, logger) =
-        Partition<Group6, StageEuro, UnconfirmedEuro, PlayerTypeFootball, MatchEventFootball>(root, false, logger)
+        Partition<GroupAToF, StageEuro, UnconfirmedEuro, PlayerTypeFootball, MatchEventFootball>(root, false, logger)
 
     let fifa2022 (root, logger) =
-        Partition<Group8, StageFifa, UnconfirmedFifaV2, PlayerTypeFootball, MatchEventFootball>(root, false, logger)
+        Partition<GroupAToH, StageFifa, UnconfirmedFifaV2, PlayerTypeFootball, MatchEventFootball>(root, false, logger)
 
     let rwc2023 (root, logger) =
-        Partition<Group4, StageRwc, UnconfirmedRwc, PlayerTypeRugby, MatchEventRugby>(root, false, logger)
+        Partition<GroupAToD, StageRwc, UnconfirmedRwc, PlayerTypeRugby, MatchEventRugby>(root, false, logger)
 
     let euro2024 (root, logger) =
-        Partition<Group6, StageEuro, UnconfirmedEuro, PlayerTypeFootball, MatchEventFootball>(root, false, logger)
+        Partition<GroupAToF, StageEuro, UnconfirmedEuro, PlayerTypeFootball, MatchEventFootball>(root, false, logger)
