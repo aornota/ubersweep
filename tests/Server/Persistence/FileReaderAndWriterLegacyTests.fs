@@ -1122,8 +1122,8 @@ module FileReaderAndWriterTestsLegacy =
                         expectedCount2
                         $"Count for {nameof expected2} should equal {expectedCount2}"
 
-                    Expect.equal actual1 expected1 $"{nameof actual1} should equal {nameof expected1}"
-                    Expect.equal actual2 expected2 $"{nameof actual2} should equal {nameof expected2}"
+                    Expect.equal actual1 (Ok expected1) $"{nameof actual1} should equal {nameof expected1}"
+                    Expect.equal actual2 (Ok expected2) $"{nameof actual2} should equal {nameof expected2}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
             testAsync "Write multiple events (with snapshots) and read (all) with partition" {
@@ -1200,8 +1200,8 @@ module FileReaderAndWriterTestsLegacy =
                         expectedCount2
                         $"Count for {nameof expected2} should equal {expectedCount2}"
 
-                    Expect.equal actual1 expected1 $"{nameof actual1} should equal {nameof expected1}"
-                    Expect.equal actual2 expected2 $"{nameof actual2} should equal {nameof expected2}"
+                    Expect.equal actual1 (Ok expected1) $"{nameof actual1} should equal {nameof expected1}"
+                    Expect.equal actual2 (Ok expected2) $"{nameof actual2} should equal {nameof expected2}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
             }
         ]

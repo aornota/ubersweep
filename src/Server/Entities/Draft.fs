@@ -39,4 +39,4 @@ type Draft = { // TODO-ENTITIES: Implement this properly...
     interface IState<Draft, DraftEvent> with
         member this.SnapshotJson = Json.toJson this
 
-        member this.Evolve event = this
+        member this.Evolve event = Ok this

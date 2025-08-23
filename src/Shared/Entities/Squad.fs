@@ -44,4 +44,29 @@ type PlayerStatus =
     | Active
     | Withdrawn of dateWithdrawn: DateTimeOffset option
 
+type SquadInitCommand<'group> =
+    | CreateSquad of squadName: string * group: 'group * seeding: Seeding option * coachName: string
+
+type SquadCommand<'playerType> =
+    | AddPlayer of playerId: PlayerId * playerName: string * playerType: 'playerType
+    | ChangePlayerName of playerId: PlayerId * playerName: string
+    | ChangePlayerType of playerId: PlayerId * playerType: 'playerType
+    | WithdrawPlayer of playerId: PlayerId * dateWithdrawn: DateTimeOffset option
+    | EliminateSquad
+
+type Player<'playerType> = {
+    PlayerName: string
+    PlayerType: 'playerType
+    PlayerStatus: PlayerStatus
+}
+
+type SquadCommon'<'group, 'playerType> = {
+    SquadName: string
+    Group: 'group
+    Seeding: Seeding option
+    CoachName: string
+    Eliminated: bool
+    Players: Map<PlayerId, Player<'playerType>>
+}
+
 type PickedBy = UserId * DraftOrdinal option * DateTimeOffset

@@ -19,3 +19,17 @@ type PostId =
 type PostType =
     | Standard
     | MatchResult of fixtureId: FixtureId
+
+type PostInitCommand =
+    | CreatePost of userId: UserId * postType: PostType * messageText: Markdown * timestamp: DateTimeOffset
+
+type PostCommand =
+    | ChangePost of messageText: Markdown
+    | RemovePost
+
+type PostCommon' = {
+    PostType: PostType
+    MessageText: Markdown
+    Timestamp: DateTimeOffset
+    Removed: bool
+}

@@ -16,10 +16,15 @@ type Entity<'id, 'state, 'event when 'id :> IId and 'state :> IState<'state, 'ev
     member this.Guid = this.Id.Guid
     member this.SnapshotJson = this.State.SnapshotJson
 
-    member this.Evolve event = {
-        this with
-            Rvn = this.Rvn.NextRvn
-            State = this.State.Evolve event
+    member this.Evolve event = result {
+        let! state = this.State.Evolve event
+
+        return!
+            Ok {
+                this with
+                    Rvn = this.Rvn.NextRvn
+                    State = state
+            }
     }
 
 [<AbstractClass>]
@@ -41,7 +46,8 @@ type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
                 | SnapshotJson _ -> Error $"Subsequent entries contain a {nameof SnapshotJson}"
             | [] -> Ok(events |> List.rev)
 
-        let folder (entity: Entity<'id, 'state, 'event>) event = entity.Evolve event
+        let folder (entity: Result<Entity<'id, 'state, 'event>, string>) event =
+            entity |> Result.bind (fun entity -> entity.Evolve event)
 
         let! entityFromFirstEntry, subsequentEntries =
             match entries.Head with
@@ -63,5 +69,5 @@ type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
 
         let! events = mapToEvents subsequentEntries []
 
-        return events |> List.fold folder entityFromFirstEntry
+        return events |> List.fold folder (Ok entityFromFirstEntry)
     }

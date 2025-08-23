@@ -33,22 +33,25 @@ type User = {
 
         member this.Evolve event =
             match event with
-            | UserTypeChanged userType -> {
-                this with
-                    UserCommon.UserType = userType
-              }
-            | PasswordChanged(passwordSalt, passwordHash) -> {
-                this with
-                    UserCommon.MustChangePasswordReason = None
-                    PasswordSalt = passwordSalt
-                    PasswordHash = passwordHash
-              }
-            | PasswordReset(passwordSalt, passwordHash) -> {
-                this with
-                    UserCommon.MustChangePasswordReason = Some MustChangePasswordReason.PasswordReset
-                    PasswordSalt = passwordSalt
-                    PasswordHash = passwordHash
-              }
+            | UserTypeChanged userType ->
+                Ok {
+                    this with
+                        UserCommon.UserType = userType
+                }
+            | PasswordChanged(passwordSalt, passwordHash) ->
+                Ok {
+                    this with
+                        UserCommon.MustChangePasswordReason = None
+                        PasswordSalt = passwordSalt
+                        PasswordHash = passwordHash
+                }
+            | PasswordReset(passwordSalt, passwordHash) ->
+                Ok {
+                    this with
+                        UserCommon.MustChangePasswordReason = Some MustChangePasswordReason.PasswordReset
+                        PasswordSalt = passwordSalt
+                        PasswordHash = passwordHash
+                }
 
 type UserHelper() =
     inherit EntityHelper<UserId, User, UserInitCommand, UserInitEvent, UserEvent>()
@@ -95,13 +98,13 @@ module User =
         | ChangeUserType userType -> Ok(UserTypeChanged userType)
         | ChangePassword(password, confirmPassword) ->
             if confirmPassword <> password then
-                Error "TODO..."
+                Error "TODO-ENTITIES..."
             else
                 let passwordSalt = salt ()
                 Ok(PasswordChanged(passwordSalt, hash (password, passwordSalt)))
         | ResetPassword(password, confirmPassword) ->
             if confirmPassword <> password then
-                Error "TODO..."
+                Error "TODO-ENTITIES..."
             else
                 let passwordSalt = salt ()
                 Ok(PasswordReset(passwordSalt, hash (password, passwordSalt)))
@@ -110,5 +113,6 @@ module User =
 
     let apply command (entity: Entity<UserId, User, UserEvent>) = result {
         let! event = decide command entity.State
-        return entity.Evolve event, event
+        let! entity = entity.Evolve event
+        return entity, event
     }

@@ -20,11 +20,69 @@ type PostEvent =
     interface IEvent with
         member this.EventJson = Json.toJson this
 
-type Post = { // TODO-ENTITIES: Implement this properly...
-    Dummy: unit
+type Post = {
+    PostCommon: PostCommon'
+    UserId: UserId
 } with
 
     interface IState<Post, PostEvent> with
         member this.SnapshotJson = Json.toJson this
 
-        member this.Evolve event = this
+        member this.Evolve event =
+            match event with
+            | PostChanged messageText ->
+                Ok {
+                    this with
+                        PostCommon.MessageText = messageText
+                }
+            | PostRemoved -> Ok { this with PostCommon.Removed = true }
+
+type PostHelper() =
+    inherit EntityHelper<PostId, Post, PostInitCommand, PostInitEvent, PostEvent>()
+
+    override _.IdFromGuid guid = PostId.FromGuid guid
+
+    override _.InitFromCommand(guid, CreatePost(userId, postType, messageText, timestamp)) =
+        {
+            Id = PostId.FromGuid guid
+            Rvn = Rvn.InitialRvn
+            State = {
+                PostCommon = {
+                    PostType = postType
+                    MessageText = messageText
+                    Timestamp = timestamp
+                    Removed = false
+                }
+                UserId = userId
+            }
+        },
+        PostCreated(userId, postType, messageText, timestamp)
+
+    override _.InitFromEvent(guid, PostCreated(userId, postType, messageText, timestamp)) = {
+        Id = PostId.FromGuid guid
+        Rvn = Rvn.InitialRvn
+        State = {
+            PostCommon = {
+                PostType = postType
+                MessageText = messageText
+                Timestamp = timestamp
+                Removed = false
+            }
+            UserId = userId
+        }
+    }
+
+[<RequireQualifiedAccess>]
+module Post =
+    let private decide command (_: Post) =
+        match command with
+        | ChangePost messageText -> Ok(PostChanged messageText)
+        | RemovePost -> Ok PostRemoved
+
+    let helper = PostHelper()
+
+    let apply command (entity: Entity<PostId, Post, PostEvent>) = result {
+        let! event = decide command entity.State
+        let! entity = entity.Evolve event
+        return entity, event
+    }

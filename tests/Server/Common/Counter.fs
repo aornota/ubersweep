@@ -51,16 +51,18 @@ type Counter = {
 
         member this.Evolve event =
             match event with
-            | Incremented -> { this with Count = this.Count + 1 }
-            | Decremented -> { this with Count = this.Count - 1 }
-            | MultipliedBy multiplier -> {
-                this with
-                    Count = this.Count * multiplier
-              }
-            | DividedBy divisor -> {
-                this with
-                    Count = this.Count / divisor
-              }
+            | Incremented -> Ok { this with Count = this.Count + 1 }
+            | Decremented -> Ok { this with Count = this.Count - 1 }
+            | MultipliedBy multiplier ->
+                Ok {
+                    this with
+                        Count = this.Count * multiplier
+                }
+            | DividedBy divisor ->
+                Ok {
+                    this with
+                        Count = this.Count / divisor
+                }
 
 type CounterEventHelper() =
     inherit EntityHelper<CounterId, Counter, CounterInitCommand, CounterInitEvent, CounterEvent>()
@@ -98,5 +100,6 @@ module Counter =
 
     let apply command (entity: Entity<CounterId, Counter, CounterEvent>) = result {
         let! event = decide command entity.State
-        return entity.Evolve event, event
+        let! entity = entity.Evolve event
+        return entity, event
     }

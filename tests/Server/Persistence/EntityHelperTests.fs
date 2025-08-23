@@ -31,11 +31,12 @@ module EntityHelperTests =
 
                 match result with
                 | Ok counter ->
-                    let expectedCounter = {
-                        Id = CounterId.FromGuid guid
-                        Rvn = Rvn.InitialRvn
-                        State = { Count = 1 }
-                    }
+                    let expectedCounter =
+                        Ok {
+                            Id = CounterId.FromGuid guid
+                            Rvn = Rvn.InitialRvn
+                            State = { Count = 1 }
+                        }
 
                     Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
@@ -60,11 +61,12 @@ module EntityHelperTests =
 
                 match result with
                 | Ok counter ->
-                    let expectedCounter = {
-                        Id = CounterId.FromGuid guid
-                        Rvn = Rvn 3u
-                        State = { Count = 1 }
-                    }
+                    let expectedCounter =
+                        Ok {
+                            Id = CounterId.FromGuid guid
+                            Rvn = Rvn 3u
+                            State = { Count = 1 }
+                        }
 
                     Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
@@ -88,11 +90,12 @@ module EntityHelperTests =
 
                 match result with
                 | Ok counter ->
-                    let expectedCounter = {
-                        Id = CounterId.FromGuid guid
-                        Rvn = Rvn 4u
-                        State = { Count = 2 }
-                    }
+                    let expectedCounter =
+                        Ok {
+                            Id = CounterId.FromGuid guid
+                            Rvn = Rvn 4u
+                            State = { Count = 2 }
+                        }
 
                     Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"

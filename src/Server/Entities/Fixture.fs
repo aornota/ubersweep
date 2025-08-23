@@ -33,4 +33,4 @@ type Fixture<'stage, 'unconfirmed, 'matchEvent> = { // TODO-ENTITIES: Implement 
     interface IState<Fixture<'stage, 'unconfirmed, 'matchEvent>, FixtureEvent<'matchEvent>> with
         member this.SnapshotJson = Json.toJson this
 
-        member this.Evolve event = this
+        member this.Evolve event = Ok this

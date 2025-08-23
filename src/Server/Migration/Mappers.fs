@@ -243,23 +243,6 @@ module Mappers =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    let mapPostEvents (events: Event<Events.NewsEvent> list, mapUserId: MapUserId) =
-        let mapPostType =
-            function
-            | Domain.Standard -> Standard
-            | Domain.MatchResult fixtureId -> MatchResult(mapFixtureId fixtureId)
-
-        events
-        |> List.map (fun event ->
-            let mappedEvent =
-                match event.Event with
-                | Events.PostCreated(_, userId, postType, messageText, timestamp) ->
-                    PostCreated(mapUserId userId, mapPostType postType, messageText, timestamp) :> IEvent
-                | Events.PostChanged(_, messageText) -> PostChanged messageText
-                | Events.PostRemoved _ -> PostRemoved
-
-            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
-
     let mapSquadEventsEuro
         (events: Event<Events.SquadEvent<GroupAToF, PlayerTypeFootball>> list, mapUserId: MapUserId)
         =
@@ -340,14 +323,28 @@ module Mappers =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    let mapUser (user: Events.User) =
+    let mapPost (post: Events.Post, mapUserId: MapUserId) =
+        let mapPostType =
+            function
+            | Domain.Standard -> Standard
+            | Domain.MatchResult fixtureId -> MatchResult(mapFixtureId fixtureId)
 
         {
-            UserCommon = {
-                UserName = user.UserName
-                UserType = user.UserType
-                MustChangePasswordReason = user.MustChangePasswordReason
+            PostCommon = {
+                PostType = mapPostType post.PostType
+                MessageText = post.MessageText
+                Timestamp = post.Timestamp
+                Removed = post.Removed
             }
-            PasswordSalt = user.PasswordSalt
-            PasswordHash = user.PasswordHash
+            UserId = mapUserId post.UserId
         }
+
+    let mapUser (user: Events.User) = {
+        UserCommon = {
+            UserName = user.UserName
+            UserType = user.UserType
+            MustChangePasswordReason = user.MustChangePasswordReason
+        }
+        PasswordSalt = user.PasswordSalt
+        PasswordHash = user.PasswordHash
+    }

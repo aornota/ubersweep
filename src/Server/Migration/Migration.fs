@@ -44,7 +44,7 @@ type private UserMapper(userLists: (Guid * Events.User * Rvn) list list) =
             else
                 failwith $"Unable to map {userId}"
 
-type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEvent, 'legacyUnconfirmed, 'legacyMatchEvent>
+type private PartitionHelper<'group, 'stage, 'playerType, 'matchEvent, 'legacyUnconfirmed, 'legacyMatchEvent>
     (
         root: string,
         partitionName: PartitionName,
@@ -58,7 +58,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
         logger
     ) =
     let logger =
-        SourcedLogger.Create<PartitionHelper<_, _, _, _, _, _, _>>(partitionName, logger)
+        SourcedLogger.Create<PartitionHelper<_, _, _, _, _, _>>(partitionName, logger)
 
     let partition = getPartition (Path.Combine(root, partitionName), logger)
 
@@ -75,7 +75,10 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 Ok()
 
         let reader =
-            persistenceFactory.GetReader<Fixture<'stage, 'unconfirmed, 'matchEvent>, FixtureEvent<'matchEvent>>(
+            persistenceFactory.GetReader<
+                Fixture<'stage, Unconfirmed<'stage, 'group>, 'matchEvent>,
+                FixtureEvent<'matchEvent>
+             >(
                 Some partitionName
             )
 
@@ -133,7 +136,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
         let! drafts = partition.ReadDrafts()
 
-        let mappedDrafts =
+        (* let mappedDrafts =
             drafts
             |> List.map (fun (guid, events, _, _) -> guid, mapDraftEvents (events, mapUserId))
 
@@ -148,16 +151,19 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 |> List.iter (fun (rvn, _, event, auditUserId) ->
                     writer.WriteEventAsync(guid, rvn, auditUserId, event, None)
                     |> Async.RunSynchronously
-                    |> ignore))
+                    |> ignore)) *)
 
         let! fixtures = partition.ReadFixtures()
 
-        let mappedFixtures =
+        (* let mappedFixtures =
             fixtures
             |> List.map (fun (guid, events, _, _) -> guid, mapFixtureEvents (events, mapUserId))
 
         let writer =
-            persistenceFactory.GetWriter<Fixture<'stage, 'unconfirmed, 'matchEvent>, FixtureEvent<'matchEvent>>(
+            persistenceFactory.GetWriter<
+                Fixture<'stage, Unconfirmed<'stage, 'group>, 'matchEvent>,
+                FixtureEvent<'matchEvent>
+             >(
                 Some partitionName
             )
 
@@ -170,13 +176,13 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 |> List.iter (fun (rvn, _, event, auditUserId) ->
                     writer.WriteEventAsync(guid, rvn, auditUserId, event, None)
                     |> Async.RunSynchronously
-                    |> ignore))
+                    |> ignore)) *)
 
         let! posts = partition.ReadPosts()
 
         let mappedPosts =
             posts
-            |> List.map (fun (guid, events, _, _) -> guid, mapPostEvents (events, mapUserId))
+            |> List.map (fun (guid, _, post, rvn) -> guid, mapPost (post, mapUserId), rvn)
 
         let writer = persistenceFactory.GetWriter<Post, PostEvent>(Some partitionName)
 
@@ -184,16 +190,14 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
         do
             mappedPosts
-            |> List.iter (fun (guid, list) ->
-                list
-                |> List.iter (fun (rvn, _, event, auditUserId) ->
-                    writer.WriteEventAsync(guid, rvn, auditUserId, event, None)
-                    |> Async.RunSynchronously
-                    |> ignore))
+            |> List.iter (fun (guid, post, rvn) ->
+                writer.CreateFromSnapshotAsync(guid, rvn, (post :> IState<Post, PostEvent>).SnapshotJson)
+                |> Async.RunSynchronously
+                |> ignore)
 
         let! squads = partition.ReadSquads()
 
-        let mappedSquads =
+        (* let mappedSquads =
             squads
             |> List.map (fun (guid, events, _, _) -> guid, mapSquadEvents (events, mapUserId))
 
@@ -209,11 +213,11 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 |> List.iter (fun (rvn, _, event, auditUserId) ->
                     writer.WriteEventAsync(guid, rvn, auditUserId, event, None)
                     |> Async.RunSynchronously
-                    |> ignore))
+                    |> ignore)) *)
 
         let! userDrafts = partition.ReadUserDrafts()
 
-        let mappedUserDrafts =
+        (* let mappedUserDrafts =
             userDrafts
             |> List.map (fun (guid, events, _, _) -> guid, mapUserDraftEvents (events, mapUserId))
 
@@ -229,7 +233,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 |> List.iter (fun (rvn, _, event, auditUserId) ->
                     writer.WriteEventAsync(guid, rvn, auditUserId, event, None)
                     |> Async.RunSynchronously
-                    |> ignore))
+                    |> ignore)) *)
 
         ()
     }
@@ -358,7 +362,6 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToH,
                 StageFifa,
-                Unconfirmed<StageFifa, GroupAToH>,
                 PlayerTypeFootball,
                 MatchEventFootball,
                 Domain.UnconfirmedFifa,
@@ -377,7 +380,6 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToD,
                 StageRwc,
-                Unconfirmed<StageRwc, GroupAToD>,
                 PlayerTypeRugby,
                 MatchEventRugby,
                 Domain.UnconfirmedRwc,
@@ -396,7 +398,6 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToF,
                 StageEuro,
-                Unconfirmed<StageEuro, GroupAToF>,
                 PlayerTypeFootball,
                 MatchEventFootball,
                 Domain.UnconfirmedEuro,
@@ -415,7 +416,6 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToH,
                 StageFifa,
-                Unconfirmed<StageFifa, GroupAToH>,
                 PlayerTypeFootball,
                 MatchEventFootball,
                 Domain.UnconfirmedFifaV2,
@@ -434,7 +434,6 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToD,
                 StageRwc,
-                Unconfirmed<StageRwc, GroupAToD>,
                 PlayerTypeRugby,
                 MatchEventRugby,
                 Domain.UnconfirmedRwc,
@@ -453,7 +452,6 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             PartitionHelper<
                 GroupAToF,
                 StageEuro,
-                Unconfirmed<StageEuro, GroupAToF>,
                 PlayerTypeFootball,
                 MatchEventFootball,
                 Domain.UnconfirmedEuro,
