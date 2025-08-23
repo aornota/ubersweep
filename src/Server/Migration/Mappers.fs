@@ -6,6 +6,8 @@ open Aornota.Ubersweep.Server.Entities
 open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Shared.Entities
 
+open System.Collections.Generic
+
 type MapUserId = Domain.UserId -> UserId
 
 [<AutoOpen>]
@@ -37,10 +39,18 @@ module Mappers =
         | Domain.ManOfTheMatch(squadId, playerId) ->
             MatchEventFootball.ManOfTheMatch(mapSquadId squadId, mapPlayerId playerId)
 
+    let private mapPLayersFootball (players: Dictionary<Domain.PlayerId, Player<PlayerTypeFootball>>) =
+        players
+        |> List.ofSeq
+        |> List.map (fun kvp -> mapPlayerId kvp.Key, kvp.Value)
+        |> Map.ofList
+
     let private mapParticipant mapUnconfirmed =
         function
         | Domain.Confirmed squadId -> Confirmed(mapSquadId squadId)
         | Domain.Unconfirmed unconfirmed -> Unconfirmed(mapUnconfirmed unconfirmed)
+
+    // TODO: Remove mapDraftEvents | mapFixtureEvents[Euro|Fifa[V2]|Rwc] | mapUserDraftEvents...
 
     let mapDraftEvents (events: Event<Events.DraftEvent> list, mapUserId: MapUserId) =
         let mapDraftPick =
@@ -243,67 +253,6 @@ module Mappers =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    let mapSquadEventsEuro
-        (events: Event<Events.SquadEvent<GroupAToF, PlayerTypeFootball>> list, mapUserId: MapUserId)
-        =
-        events
-        |> List.map (fun event ->
-            let mappedEvent =
-                match event.Event with
-                | Events.SquadCreated(_, Events.SquadName squadName, group, seeding, Events.CoachName coachName) ->
-                    SquadCreated(squadName, group, seeding, coachName) :> IEvent
-                | Events.PlayerAdded(_, playerId, Events.PlayerName playerName, playerType) ->
-                    PlayerAdded(mapPlayerId playerId, playerName, playerType)
-                | Events.PlayerNameChanged(_, playerId, Events.PlayerName playerName) ->
-                    PlayerNameChanged(mapPlayerId playerId, playerName)
-                | Events.PlayerTypeChanged(_, playerId, playerType) ->
-                    PlayerTypeChanged(mapPlayerId playerId, playerType)
-                | Events.PlayerWithdrawn(_, playerId, dateWithdrawn) ->
-                    PlayerWithdrawn(mapPlayerId playerId, dateWithdrawn)
-                | Events.SquadEliminated _ -> SquadEliminated
-
-            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
-
-    let mapSquadEventsFifa
-        (events: Event<Events.SquadEvent<GroupAToH, PlayerTypeFootball>> list, mapUserId: MapUserId)
-        =
-        events
-        |> List.map (fun event ->
-            let mappedEvent =
-                match event.Event with
-                | Events.SquadCreated(_, Events.SquadName squadName, group, seeding, Events.CoachName coachName) ->
-                    SquadCreated(squadName, group, seeding, coachName) :> IEvent
-                | Events.PlayerAdded(_, playerId, Events.PlayerName playerName, playerType) ->
-                    PlayerAdded(mapPlayerId playerId, playerName, playerType)
-                | Events.PlayerNameChanged(_, playerId, Events.PlayerName playerName) ->
-                    PlayerNameChanged(mapPlayerId playerId, playerName)
-                | Events.PlayerTypeChanged(_, playerId, playerType) ->
-                    PlayerTypeChanged(mapPlayerId playerId, playerType)
-                | Events.PlayerWithdrawn(_, playerId, dateWithdrawn) ->
-                    PlayerWithdrawn(mapPlayerId playerId, dateWithdrawn)
-                | Events.SquadEliminated _ -> SquadEliminated
-
-            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
-
-    let mapSquadEventsRwc (events: Event<Events.SquadEvent<GroupAToD, PlayerTypeRugby>> list, mapUserId: MapUserId) =
-        events
-        |> List.map (fun event ->
-            let mappedEvent =
-                match event.Event with
-                | Events.SquadCreated(_, Events.SquadName squadName, group, seeding, Events.CoachName coachName) ->
-                    SquadCreated(squadName, group, seeding, coachName) :> IEvent
-                | Events.PlayerAdded(_, playerId, Events.PlayerName playerName, playerType) ->
-                    PlayerAdded(mapPlayerId playerId, playerName, playerType)
-                | Events.PlayerNameChanged(_, playerId, Events.PlayerName playerName) ->
-                    PlayerNameChanged(mapPlayerId playerId, playerName)
-                | Events.PlayerTypeChanged(_, playerId, playerType) ->
-                    PlayerTypeChanged(mapPlayerId playerId, playerType)
-                | Events.PlayerWithdrawn(_, playerId, dateWithdrawn) ->
-                    PlayerWithdrawn(mapPlayerId playerId, dateWithdrawn)
-                | Events.SquadEliminated _ -> SquadEliminated
-
-            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
-
     let mapUserDraftEvents (events: Event<Events.UserDraftEvent> list, mapUserId: MapUserId) =
         let mapUserDraftPick =
             function
@@ -323,6 +272,13 @@ module Mappers =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
+    // TODO: mapDraft (draft: Events.Draft, mapUserId: MapUserId) =...
+
+    // TODO: mapFixtureEuro (fixture: Events.Fixture<StageEuro, Domain.UnconfirmedEuro, Domain.MatchEventFootball>, mapUserId: MapUserId) =...
+    // TODO: mapFixtureFifa (fixture: Events.Fixture<StageFifa, Domain.UnconfirmedFifa, Domain.MatchEventFootball>, mapUserId: MapUserId) =...
+    // TODO: mapFixtureFifaV2 (fixture: Events.Fixture<StageFifa, Domain.UnconfirmedFifaV2, Domain.MatchEventFootball>, mapUserId: MapUserId) =...
+    // TODO: mapFixtureRwc (fixture: Events.Fixture<StageRwc, Domain.UnconfirmedRwc, Domain.MatchEventRugby>, mapUserId: MapUserId) =...
+
     let mapPost (post: Events.Post, mapUserId: MapUserId) =
         let mapPostType =
             function
@@ -339,6 +295,46 @@ module Mappers =
             UserId = mapUserId post.UserId
         }
 
+    let mapSquadEuro (squad: Events.Squad<GroupAToF, PlayerTypeFootball>) = {
+        SquadCommon = {
+            SquadName = squad.SquadName
+            Group = squad.Group
+            Seeding = squad.Seeding
+            CoachName = squad.CoachName
+            Eliminated = squad.Eliminated
+            Players = mapPLayersFootball squad.Players
+        }
+    }
+
+    let mapSquadFifa (squad: Events.Squad<GroupAToH, PlayerTypeFootball>) = {
+        SquadCommon = {
+            SquadName = squad.SquadName
+            Group = squad.Group
+            Seeding = squad.Seeding
+            CoachName = squad.CoachName
+            Eliminated = squad.Eliminated
+            Players = mapPLayersFootball squad.Players
+        }
+    }
+
+    let mapSquadRwc (squad: Events.Squad<GroupAToD, PlayerTypeRugby>) =
+        let mapPLayersRugby (players: Dictionary<Domain.PlayerId, Player<PlayerTypeRugby>>) =
+            players
+            |> List.ofSeq
+            |> List.map (fun kvp -> mapPlayerId kvp.Key, kvp.Value)
+            |> Map.ofList
+
+        {
+            SquadCommon = {
+                SquadName = squad.SquadName
+                Group = squad.Group
+                Seeding = squad.Seeding
+                CoachName = squad.CoachName
+                Eliminated = squad.Eliminated
+                Players = mapPLayersRugby squad.Players
+            }
+        }
+
     let mapUser (user: Events.User) = {
         UserCommon = {
             UserName = user.UserName
@@ -348,3 +344,5 @@ module Mappers =
         PasswordSalt = user.PasswordSalt
         PasswordHash = user.PasswordHash
     }
+
+// TODO: mapUserDraft (userDraft: Events.UserDraft, mapUserId: MapUserId) =...

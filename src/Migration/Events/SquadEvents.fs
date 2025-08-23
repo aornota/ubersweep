@@ -25,12 +25,6 @@ type SquadEvent<'group, 'playerType> =
     | PlayerWithdrawn of squadId: SquadId * playerId: PlayerId * dateWithdrawn: DateTimeOffset option
     | SquadEliminated of squadId: SquadId
 
-type Player<'playerType> = {
-    PlayerName: string
-    PlayerType: 'playerType
-    PlayerStatus: PlayerStatus
-}
-
 type Squad<'group, 'playerType> = {
     SquadName: string
     Group: 'group
