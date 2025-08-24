@@ -48,9 +48,17 @@ type SquadInitCommand<'group> =
     | CreateSquad of squadName: string * group: 'group * seeding: Seeding option * coachName: string
 
 type SquadCommand<'playerType> =
+    (* TODO-ENTITIES?...
+    | ChangeSquadName of squadName: string
+    | ChangeGroup of group: 'group
+    | ChangeSeeding of seeding: Seeding option
+    | ChangeCoachName of coachName: string
+    | RemovePlayer of playerId: PlayerId
+    *)
     | AddPlayer of playerId: PlayerId * playerName: string * playerType: 'playerType
     | ChangePlayerName of playerId: PlayerId * playerName: string
     | ChangePlayerType of playerId: PlayerId * playerType: 'playerType
+    // TODO-ENTITIES: Why is dateWithdrawn optional?...
     | WithdrawPlayer of playerId: PlayerId * dateWithdrawn: DateTimeOffset option
     | EliminateSquad
 

@@ -16,19 +16,6 @@ type DraftId =
             let (DraftId guid) = this
             guid
 
-type DraftType =
-    | Constrained of starts: DateTimeOffset * ends: DateTimeOffset
-    | Unconstrained
-
-type DraftStatus =
-    | PendingOpen of starts: DateTimeOffset * ends: DateTimeOffset
-    | Opened of ends: DateTimeOffset
-    | PendingProcessing
-    | Processing
-    | Processed
-    | PendingFreeSelection
-    | FreeSelection
-
 type DraftPick =
     | TeamPicked of squadId: SquadId
     | PlayerPicked of squadId: SquadId * playerId: PlayerId
@@ -46,9 +33,36 @@ type ProcessingEvent =
     | PickPriorityChanged of userId: UserId * pickPriority: uint32
     | Picked of draftOrdinal: DraftOrdinal * draftPick: DraftPick * userId: UserId * timestamp: DateTimeOffset
 
-type DraftInitCommand = CreateDraft of draftOrdinal: DraftOrdinal * draftType: DraftType
+type ConstrainedStatus =
+    | PendingOpen of starts: DateTimeOffset * ends: DateTimeOffset
+    | Opened of ends: DateTimeOffset
+    | PendingProcessing
+    | Processing
+    | Processed of
+        draftPicks: (DraftPick * PickedBy) list *
+        processingEvents: ProcessingEvent list *
+        pickPriorities: Map<UserId, uint32>
+
+type UnconstrainedStatus =
+    // TODO-ENTITIES: Is PendingFreeSelection needed?...
+    | PendingFreeSelection
+    | FreeSelection of draftPicks: (DraftPick * PickedBy) list
+
+type DraftStatus =
+    | ConstrainedDraft of draftOrdinal: DraftOrdinal * constrainedStatus: ConstrainedStatus
+    | UnconstrainedDraft of unconstrainedStatus: UnconstrainedStatus
+
+type DraftType =
+    | Constrained of draftOrdinal: DraftOrdinal * starts: DateTimeOffset * ends: DateTimeOffset
+    | Unconstrained
+
+type DraftInitCommand = CreateDraft of draftType: DraftType
 
 type DraftCommand =
+    (* TODO-ENTITIES?...
+    | ChangeStarts of starts: DateTimeOffset
+    | ChangeEnds of ends: DateTimeOffset
+    *)
     | OpenDraft
     | CloseDraft
     | StartProcessing
@@ -59,10 +73,4 @@ type DraftCommand =
     | OpenFreeSelection
     | MakeFreePick of draftPick: DraftPick * userId: UserId * timestamp: DateTimeOffset
 
-type DraftCommon' = {
-    DraftOrdinal: DraftOrdinal
-    DraftStatus: DraftStatus
-    DraftPicks: (DraftPick * PickedBy) list
-    ProcessingEvents: ProcessingEvent list
-    PickPriorities: Map<UserId, uint32>
-}
+type DraftCommon' = { DraftStatus: DraftStatus }

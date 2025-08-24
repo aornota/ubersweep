@@ -14,9 +14,9 @@ type UserDraftInitEvent =
         member this.EventJson = Json.toJson this
 
 type UserDraftEvent =
-    | Drafted of userDraftPick: UserDraftPick
-    | Undrafted of userDraftPick: UserDraftPick
-    | PriorityChanged of userDraftPick: UserDraftPick * priorityChange: PriorityChange
+    | DraftPickAdded of userDraftPick: UserDraftPick
+    | DraftPickRemoved of userDraftPick: UserDraftPick
+    | DraftPickPriorityChanged of userDraftPick: UserDraftPick * priorityChange: PriorityChange
 
     interface IEvent with
         member this.EventJson = Json.toJson this
@@ -30,9 +30,9 @@ type UserDraft = {
 
         member this.Evolve event =
             match event with
-            | Drafted userDraftPick ->
+            | DraftPickAdded userDraftPick ->
                 match this.UserDraftCommon.UserDraftPicks |> Map.tryFind userDraftPick with
-                | Some _ -> Error $"{nameof Drafted} when {userDraftPick} already in {nameof UserDraft}"
+                | Some _ -> Error $"{nameof DraftPickAdded} when {userDraftPick} already in {nameof UserDraft}"
                 | None ->
                     Ok {
                         this with
@@ -40,7 +40,7 @@ type UserDraft = {
                                 this.UserDraftCommon.UserDraftPicks
                                 |> Map.add userDraftPick (this.UserDraftCommon.UserDraftPicks.Count + 1)
                     }
-            | Undrafted userDraftPick ->
+            | DraftPickRemoved userDraftPick ->
                 match this.UserDraftCommon.UserDraftPicks |> Map.tryFind userDraftPick with
                 | Some _ ->
                     let list =
@@ -53,8 +53,8 @@ type UserDraft = {
                         this with
                             UserDraftCommon.UserDraftPicks = list |> Map.ofList
                     }
-                | None -> Error $"{nameof Undrafted} when {userDraftPick} not in {nameof UserDraft}"
-            | PriorityChanged(userDraftPick, priorityChange) ->
+                | None -> Error $"{nameof DraftPickRemoved} when {userDraftPick} not in {nameof UserDraft}"
+            | DraftPickPriorityChanged(userDraftPick, priorityChange) ->
                 match this.UserDraftCommon.UserDraftPicks |> Map.tryFind userDraftPick with
                 | Some _ ->
                     let adjustment =
@@ -80,7 +80,7 @@ type UserDraft = {
                         this with
                             UserDraftCommon.UserDraftPicks = list |> Map.ofList
                     }
-                | None -> Error $"{nameof Undrafted} when {userDraftPick} not in {nameof UserDraft}"
+                | None -> Error $"{nameof DraftPickRemoved} when {userDraftPick} not in {nameof UserDraft}"
 
 type UserDraftelper() =
     inherit EntityHelper<UserDraftId, UserDraft, UserDraftInitCommand, UserDraftInitEvent, UserDraftEvent>()
@@ -115,18 +115,18 @@ type UserDraftelper() =
 module UserDraft =
     let private decide (command: UserDraftCommand) (userDraft: UserDraft) =
         match command with
-        | Draft userDraftPick ->
+        | AddDraftPick userDraftPick ->
             match userDraft.UserDraftCommon.UserDraftPicks |> Map.tryFind userDraftPick with
-            | Some _ -> Error $"{nameof Draft} when {userDraftPick} already in {nameof UserDraft}"
-            | None -> Ok(Drafted userDraftPick)
-        | Undraft userDraftPick ->
+            | Some _ -> Error $"{nameof AddDraftPick} when {userDraftPick} already in {nameof UserDraft}"
+            | None -> Ok(DraftPickAdded userDraftPick)
+        | RemoveDraftPick userDraftPick ->
             match userDraft.UserDraftCommon.UserDraftPicks |> Map.tryFind userDraftPick with
-            | Some _ -> Ok(Undrafted userDraftPick)
-            | None -> Error $"{nameof Undraft} when {userDraftPick} not in {nameof UserDraft}"
-        | ChangePriority(userDraftPick, priorityChange) ->
+            | Some _ -> Ok(DraftPickRemoved userDraftPick)
+            | None -> Error $"{nameof RemoveDraftPick} when {userDraftPick} not in {nameof UserDraft}"
+        | ChangeDraftPickPriority(userDraftPick, priorityChange) ->
             match userDraft.UserDraftCommon.UserDraftPicks |> Map.tryFind userDraftPick with
-            | Some _ -> Ok(PriorityChanged(userDraftPick, priorityChange))
-            | None -> Error $"{nameof ChangePriority} when {userDraftPick} not in {nameof UserDraft}"
+            | Some _ -> Ok(DraftPickPriorityChanged(userDraftPick, priorityChange))
+            | None -> Error $"{nameof ChangeDraftPickPriority} when {userDraftPick} not in {nameof UserDraft}"
 
     let helper = UserDraftelper()
 

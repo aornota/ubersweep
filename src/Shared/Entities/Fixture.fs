@@ -32,6 +32,8 @@ type Role =
     | Home
     | Away
 
+// TODO-ENTITIES: Check format for 2026-fifa (e.g. 48 squads?)...
+
 type StageEuro =
     | Group of group: GroupAToF
     | RoundOf16 of matchNumber: uint32
@@ -105,6 +107,13 @@ type FixtureInitCommand<'stage, 'unconfirmed> =
         kickOff: DateTimeOffset
 
 type FixtureCommand<'matchEvent> =
+    (* TODO-ENTITIES?...
+    | ChangeStage of stage: 'stage
+    | ChangeParticipanet of role: Role * Participant<'unconfirmed>
+    | ChangeKickOff of kickOff: DateTimeOffset
+    | MarkAsInProgress
+    | MarkAsComplete
+    *)
     | ConfirmParticipant of role: Role * squadId: SquadId
     | AddMatchEvent of matchEventId: MatchEventId * matchEvent: 'matchEvent
     | RemoveMatchEvent of matchEventId: MatchEventId

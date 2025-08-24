@@ -103,13 +103,30 @@ module Mappers =
             |> List.map (fun kvp -> mapUserId kvp.Key, kvp.Value)
             |> Map.ofList
 
+        let mapDraftStatus =
+            function
+            | Domain.ConstrainedDraft(draftOrdinal, Domain.PendingOpen(starts, ends)) ->
+                ConstrainedDraft(draftOrdinal, PendingOpen(starts, ends))
+            | Domain.ConstrainedDraft(draftOrdinal, Domain.Opened ends) -> ConstrainedDraft(draftOrdinal, Opened ends)
+            | Domain.ConstrainedDraft(draftOrdinal, Domain.PendingProcessing) ->
+                ConstrainedDraft(draftOrdinal, PendingProcessing)
+            | Domain.ConstrainedDraft(draftOrdinal, Domain.Processing _) -> ConstrainedDraft(draftOrdinal, Processing)
+            | Domain.ConstrainedDraft(draftOrdinal, Domain.Processed(draftPicks, processingEvents, pickPriorities)) ->
+                ConstrainedDraft(
+                    draftOrdinal,
+                    Processed(
+                        mapDraftPicks draftPicks,
+                        processingEvents |> List.map mapProcessingEvent,
+                        mapPickPriorities pickPriorities
+                    )
+                )
+            | Domain.UnconstrainedDraft Domain.PendingFreeSelection -> UnconstrainedDraft PendingFreeSelection
+            | Domain.UnconstrainedDraft(Domain.FreeSelection draftPicks) ->
+                UnconstrainedDraft(FreeSelection(mapDraftPicks draftPicks))
+
         {
             DraftCommon = {
-                DraftOrdinal = draft.DraftOrdinal
-                DraftStatus = draft.DraftStatus
-                DraftPicks = mapDraftPicks draft.DraftPicks
-                ProcessingEvents = draft.ProcessingEvents |> List.map mapProcessingEvent
-                PickPriorities = mapPickPriorities draft.PickPriorities
+                DraftStatus = mapDraftStatus draft.DraftStatus
             }
         }
 

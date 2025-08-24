@@ -338,7 +338,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
 
         let! _ =
             if canMigrate then
-                logger.Information "Checking Users..."
+                logger.Information("Checking {user}s...", nameof User)
                 Ok()
             else
                 logger.Information "Skipping migration"

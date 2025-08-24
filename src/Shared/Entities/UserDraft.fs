@@ -27,9 +27,9 @@ type PriorityChange =
 type UserDraftInitCommand = CreateUserDraft of userId: UserId * draftId: DraftId
 
 type UserDraftCommand =
-    | Draft of userDraftPick: UserDraftPick
-    | Undraft of userDraftPick: UserDraftPick
-    | ChangePriority of userDraftPick: UserDraftPick * priorityChange: PriorityChange
+    | AddDraftPick of userDraftPick: UserDraftPick
+    | RemoveDraftPick of userDraftPick: UserDraftPick
+    | ChangeDraftPickPriority of userDraftPick: UserDraftPick * priorityChange: PriorityChange
 
 type UserDraftCommon' = {
     UserDraftKey: UserId * DraftId

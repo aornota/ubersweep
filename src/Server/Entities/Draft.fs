@@ -8,25 +8,15 @@ open FsToolkit.ErrorHandling
 open System
 
 type DraftInitEvent =
-    | DraftCreated of draftOrdinal: DraftOrdinal * draftType: DraftType
+    | DraftCreated of draftType: DraftType
 
     interface IEvent with
         member this.EventJson = Json.toJson this
 
 type DraftEvent =
-    | DraftOpened of ends: DateTimeOffset
+    | DraftOpened
     | DraftClosed
     | ProcessingStarted
-    (* TODO-ENTITIES: These are really ProcessingEvents...
-    | WithdrawnPlayersIgnored of ignored: (UserId * (SquadId * PlayerId) list) list
-    | RoundStarted of round: uint32
-    | AlreadyPickedIgnored of ignored: (UserId * DraftPick list) list
-    | NoLongerRequiredIgnored of ignored: (UserId * DraftPick list) list
-    | UncontestedPick of draftPick: DraftPick * userId: UserId
-    | ContestedPick of draftPick: DraftPick * userDetails: (UserId * uint32 * float option) list * winner: UserId
-    | PickPriorityChanged of userId: UserId * pickPriority: uint32
-    | Picked of draftOrdinal: DraftOrdinal * draftPick: DraftPick * userId: UserId * timestamp: DateTimeOffset
-    *)
     | ProcessingFinished of
         draftPicks: (DraftPick * PickedBy) list *
         processingEvents: ProcessingEvent list *
@@ -46,80 +36,92 @@ type Draft = {
 
         member this.Evolve event =
             match event with
-            | DraftOpened ends ->
-                Ok {
-                    this with
-                        DraftCommon.DraftStatus = Opened ends
-                }
+            | DraftOpened ->
+                match this.DraftCommon.DraftStatus with
+                | ConstrainedDraft(draftOrdinal, PendingOpen(_, ends)) ->
+                    Ok {
+                        this with
+                            DraftCommon.DraftStatus = ConstrainedDraft(draftOrdinal, Opened ends)
+                    }
+                | _ -> Error $"{nameof DraftOpened} when {nameof Draft} not {nameof PendingOpen}"
             | DraftClosed ->
-                Ok {
-                    this with
-                        DraftCommon.DraftStatus = PendingProcessing
-                }
+                match this.DraftCommon.DraftStatus with
+                | ConstrainedDraft(draftOrdinal, Opened _) ->
+                    Ok {
+                        this with
+                            DraftCommon.DraftStatus = ConstrainedDraft(draftOrdinal, PendingProcessing)
+                    }
+                | _ -> Error $"{nameof DraftClosed} when {nameof Draft} not {nameof Opened}"
             | ProcessingStarted ->
-                Ok {
-                    this with
-                        DraftCommon.DraftStatus = Processing
-                }
+                match this.DraftCommon.DraftStatus with
+                | ConstrainedDraft(draftOrdinal, PendingProcessing) ->
+                    Ok {
+                        this with
+                            DraftCommon.DraftStatus = ConstrainedDraft(draftOrdinal, Processing)
+                    }
+                | _ -> Error $"{nameof ProcessingStarted} when {nameof Draft} not {nameof PendingProcessing}"
             | ProcessingFinished(draftPicks, processingEvents, pickPriorities) ->
-                Ok {
-                    this with
-                        DraftCommon.DraftStatus = Processing
-                        DraftCommon.DraftPicks = draftPicks
-                        DraftCommon.ProcessingEvents = processingEvents
-                        DraftCommon.PickPriorities = pickPriorities
-                }
+                match this.DraftCommon.DraftStatus with
+                | ConstrainedDraft(draftOrdinal, Processing) ->
+                    Ok {
+                        this with
+                            DraftCommon.DraftStatus =
+                                ConstrainedDraft(draftOrdinal, Processed(draftPicks, processingEvents, pickPriorities))
+                    }
+                | _ -> Error $"{nameof ProcessingFinished} when {nameof Draft} not {nameof Processing}"
             | FreeSelectionOpened ->
-                Ok {
-                    this with
-                        DraftCommon.DraftStatus = FreeSelection
-                }
+                match this.DraftCommon.DraftStatus with
+                | UnconstrainedDraft PendingFreeSelection ->
+                    Ok {
+                        this with
+                            DraftCommon.DraftStatus = UnconstrainedDraft(FreeSelection [])
+                    }
+                | _ -> Error $"{nameof FreeSelectionOpened} when {nameof Draft} not {nameof PendingFreeSelection}"
             | FreePickMade(draftPick, userId, timestamp) ->
-                Ok {
-                    this with
-                        DraftCommon.DraftPicks =
-                            (draftPick, (userId, None, timestamp))
-                            :: (this.DraftCommon.DraftPicks |> List.rev)
-                            |> List.rev
-                }
+                match this.DraftCommon.DraftStatus with
+                | UnconstrainedDraft(FreeSelection draftPicks) ->
+                    Ok {
+                        this with
+                            DraftCommon.DraftStatus =
+                                UnconstrainedDraft(
+                                    FreeSelection(
+                                        (draftPick, (userId, None, timestamp)) :: (draftPicks |> List.rev) |> List.rev
+                                    )
+                                )
+                    }
+                | _ -> Error $"{nameof FreePickMade} when {nameof Draft} not {nameof FreeSelection}"
 
 type DraftHelper() =
     inherit EntityHelper<DraftId, Draft, DraftInitCommand, DraftInitEvent, DraftEvent>()
 
     override _.IdFromGuid guid = DraftId.FromGuid guid
 
-    override _.InitFromCommand(guid, CreateDraft(draftOrdinal, draftType)) =
+    override _.InitFromCommand(guid, CreateDraft draftType) =
         {
             Id = DraftId.FromGuid guid
             Rvn = Rvn.InitialRvn
             State = {
                 DraftCommon = {
-                    DraftOrdinal = draftOrdinal
                     DraftStatus =
                         match draftType with
-                        | Constrained(starts, ends) -> PendingOpen(starts, ends)
-                        | Unconstrained -> PendingFreeSelection
-                    DraftPicks = []
-                    ProcessingEvents = []
-                    PickPriorities = Map.empty<UserId, uint32>
+                        | Constrained(draftOrdinal, starts, ends) ->
+                            ConstrainedDraft(draftOrdinal, PendingOpen(starts, ends))
+                        | Unconstrained -> UnconstrainedDraft PendingFreeSelection
                 }
             }
         },
-        DraftCreated(draftOrdinal, draftType)
+        DraftCreated draftType
 
-    override _.InitFromEvent(guid, DraftCreated(draftOrdinal, draftType)) = {
+    override _.InitFromEvent(guid, DraftCreated draftType) = {
         Id = DraftId.FromGuid guid
         Rvn = Rvn.InitialRvn
         State = {
             DraftCommon = {
-                DraftOrdinal = draftOrdinal
                 DraftStatus =
                     match draftType with
-                    | Constrained(starts, ends) -> PendingOpen(starts, ends)
-                    | Unconstrained -> PendingFreeSelection
-                DraftPicks = []
-                ProcessingEvents = []
-                PickPriorities = Map.empty<UserId, uint32>
+                    | Constrained(draftOrdinal, starts, ends) ->
+                        ConstrainedDraft(draftOrdinal, PendingOpen(starts, ends))
+                    | Unconstrained -> UnconstrainedDraft PendingFreeSelection
             }
         }
     }
@@ -130,27 +132,27 @@ module Draft =
         match command with
         | OpenDraft ->
             match draft.DraftCommon.DraftStatus with
-            | PendingOpen(_, ends) -> Ok(DraftOpened ends)
+            | ConstrainedDraft(_, PendingOpen(_, ends)) -> Ok DraftOpened
             | _ -> Error $"{nameof OpenDraft} when {nameof Draft} is not {nameof PendingOpen}"
         | CloseDraft ->
             match draft.DraftCommon.DraftStatus with
-            | Opened _ -> Ok DraftClosed
+            | ConstrainedDraft(_, Opened _) -> Ok DraftClosed
             | _ -> Error $"{nameof CloseDraft} when {nameof Draft} is not {nameof Opened}"
         | StartProcessing ->
             match draft.DraftCommon.DraftStatus with
-            | PendingProcessing -> Ok ProcessingStarted
+            | ConstrainedDraft(_, PendingProcessing) -> Ok ProcessingStarted
             | _ -> Error $"{nameof StartProcessing} when {nameof Draft} is not {nameof PendingProcessing}"
         | FinishProcesing(draftPicks, processingEvents, pickPriorities) ->
             match draft.DraftCommon.DraftStatus with
-            | Processing -> Ok(ProcessingFinished(draftPicks, processingEvents, pickPriorities))
+            | ConstrainedDraft(_, Processing) -> Ok(ProcessingFinished(draftPicks, processingEvents, pickPriorities))
             | _ -> Error $"{nameof FinishProcesing} when {nameof Draft} is not {nameof Processing}"
         | OpenFreeSelection ->
             match draft.DraftCommon.DraftStatus with
-            | PendingFreeSelection -> Ok FreeSelectionOpened
+            | UnconstrainedDraft PendingFreeSelection -> Ok FreeSelectionOpened
             | _ -> Error $"{nameof OpenFreeSelection} when {nameof Draft} is not {nameof PendingFreeSelection}"
         | MakeFreePick(draftPick, userId, timestamp) ->
             match draft.DraftCommon.DraftStatus with
-            | FreeSelection -> Ok(FreePickMade(draftPick, userId, timestamp))
+            | UnconstrainedDraft(FreeSelection _) -> Ok(FreePickMade(draftPick, userId, timestamp))
             | _ -> Error $"{nameof MakeFreePick} when {nameof Draft} is not {nameof FreeSelection}"
 
     let helper = DraftHelper()
