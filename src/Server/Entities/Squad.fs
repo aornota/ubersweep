@@ -152,7 +152,11 @@ module Squad =
             match squad.SquadCommon.Players |> Map.tryFind playerId with
             | Some _ -> Ok(PlayerWithdrawn(playerId, dateWithdrawn))
             | None -> Error $"{nameof WithdrawPlayer} when {playerId} not in {nameof Squad}"
-        | EliminateSquad -> Ok SquadEliminated
+        | EliminateSquad ->
+            if squad.SquadCommon.Eliminated then
+                Error $"{nameof EliminateSquad} when {nameof Squad} already eliminated"
+            else
+                Ok SquadEliminated
 
     let helperEuro = SquadHelper<GroupAToF, PlayerTypeFootball>()
     let helperFifa = SquadHelper<GroupAToH, PlayerTypeFootball>()

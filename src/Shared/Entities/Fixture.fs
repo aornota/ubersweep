@@ -96,3 +96,25 @@ type MatchEventRugby =
     | YellowCard of squadId: SquadId * playerId: PlayerId
     | RedCard of squadId: SquadId * playerId: PlayerId
     | ManOfTheMatch of squadId: SquadId * playerId: PlayerId
+
+type FixtureInitCommand<'stage, 'unconfirmed> =
+    | CreateFixture of
+        stage: 'stage *
+        homeParticipant: Participant<'unconfirmed> *
+        awayParticipant: Participant<'unconfirmed> *
+        kickOff: DateTimeOffset
+
+type FixtureCommand<'matchEvent> =
+    | ConfirmParticipant of role: Role * squadId: SquadId
+    | AddMatchEvent of matchEventId: MatchEventId * matchEvent: 'matchEvent
+    | RemoveMatchEvent of matchEventId: MatchEventId
+    | CancelFixture
+
+type FixtureCommon'<'stage, 'unconfirmed, 'matchEvent> = {
+    Stage: 'stage
+    HomeParticipant: Participant<'unconfirmed>
+    AwayParticipant: Participant<'unconfirmed>
+    KickOff: DateTimeOffset
+    Cancelled: bool
+    MatchEvents: Map<MatchEventId, 'matchEvent>
+}

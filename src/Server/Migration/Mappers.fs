@@ -253,25 +253,6 @@ module Mappers =
 
             event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
 
-    let mapUserDraftEvents (events: Event<Events.UserDraftEvent> list, mapUserId: MapUserId) =
-        let mapUserDraftPick =
-            function
-            | Domain.TeamPick sqaudId -> TeamPick(mapSquadId sqaudId)
-            | Domain.PlayerPick(squadId, playerId) -> PlayerPick(mapSquadId squadId, mapPlayerId playerId)
-
-        events
-        |> List.map (fun event ->
-            let mappedEvent =
-                match event.Event with
-                | Events.UserDraftCreated(_, userId, draftId) ->
-                    UserDraftCreated(mapUserId userId, mapDraftId draftId) :> IEvent
-                | Events.Drafted(_, userDraftPick) -> Drafted(mapUserDraftPick userDraftPick)
-                | Events.Undrafted(_, userDraftPick) -> Undrafted(mapUserDraftPick userDraftPick)
-                | Events.PriorityChanged(_, userDraftPick, priorityChange) ->
-                    PriorityChanged(mapUserDraftPick userDraftPick, priorityChange)
-
-            event.Rvn, event.TimestampUtc, mappedEvent, mapUserId event.AuditUserId)
-
     // TODO: mapDraft (draft: Events.Draft, mapUserId: MapUserId) =...
 
     // TODO: mapFixtureEuro (fixture: Events.Fixture<StageEuro, Domain.UnconfirmedEuro, Domain.MatchEventFootball>) =...
@@ -345,4 +326,23 @@ module Mappers =
         PasswordHash = user.PasswordHash
     }
 
-// TODO: mapUserDraft (userDraft: Events.UserDraft, mapUserId: MapUserId) =...
+    let mapUserDraft (userDraft: Events.UserDraft, mapUserId: MapUserId) =
+        let mapUserDraftPicks (userDraftPicks: Dictionary<Domain.UserDraftPick, int>) =
+            let mapUserDraftPick =
+                function
+                | Domain.TeamPick sqaudId -> TeamPick(mapSquadId sqaudId)
+                | Domain.PlayerPick(squadId, playerId) -> PlayerPick(mapSquadId squadId, mapPlayerId playerId)
+
+            userDraftPicks
+            |> List.ofSeq
+            |> List.map (fun kvp -> mapUserDraftPick kvp.Key, kvp.Value)
+            |> Map.ofList
+
+        let userId, draftId = userDraft.UserDraftKey
+
+        {
+            UserDraftCommon = {
+                UserDraftKey = mapUserId userId, mapDraftId draftId
+                UserDraftPicks = mapUserDraftPicks userDraft.UserDraftPicks
+            }
+        }

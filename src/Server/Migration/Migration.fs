@@ -202,11 +202,11 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
         do
             mappedSquads
-            |> List.iter (fun (guid, post, rvn) ->
+            |> List.iter (fun (guid, squad, rvn) ->
                 writer.CreateFromSnapshotAsync(
                     guid,
                     rvn,
-                    (post :> IState<Squad<'group, 'playerType>, SquadEvent<'playerType>>)
+                    (squad :> IState<Squad<'group, 'playerType>, SquadEvent<'playerType>>)
                         .SnapshotJson
                 )
                 |> Async.RunSynchronously
@@ -214,9 +214,9 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
         let! userDrafts = partition.ReadUserDrafts()
 
-        (* let mappedUserDrafts =
+        let mappedUserDrafts =
             userDrafts
-            |> List.map (fun (guid, events, _, _) -> guid, mapUserDraftEvents (events, mapUserId))
+            |> List.map (fun (guid, _, userDraft, rvn) -> guid, mapUserDraft (userDraft, mapUserId), rvn)
 
         let writer =
             persistenceFactory.GetWriter<UserDraft, UserDraftEvent>(Some partitionName)
@@ -225,12 +225,14 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
         do
             mappedUserDrafts
-            |> List.iter (fun (guid, list) ->
-                list
-                |> List.iter (fun (rvn, _, event, auditUserId) ->
-                    writer.WriteEventAsync(guid, rvn, auditUserId, event, None)
-                    |> Async.RunSynchronously
-                    |> ignore)) *)
+            |> List.iter (fun (guid, userDraft, rvn) ->
+                writer.CreateFromSnapshotAsync(
+                    guid,
+                    rvn,
+                    (userDraft :> IState<UserDraft, UserDraftEvent>).SnapshotJson
+                )
+                |> Async.RunSynchronously
+                |> ignore)
 
         ()
     }
