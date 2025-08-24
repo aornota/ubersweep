@@ -16,6 +16,14 @@ type UserDraftId =
             let (UserDraftId guid) = this
             guid
 
+type UserDraftPick =
+    | TeamPick of squadId: SquadId
+    | PlayerPick of squadId: SquadId * playerId: PlayerId
+
+type PriorityChange =
+    | Increase
+    | Decrease
+
 type UserDraftInitCommand = CreateUserDraft of userId: UserId * draftId: DraftId
 
 type UserDraftCommand =

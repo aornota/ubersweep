@@ -68,5 +68,3 @@ type SquadCommon'<'group, 'playerType> = {
     Eliminated: bool
     Players: Map<PlayerId, Player<'playerType>>
 }
-
-type PickedBy = UserId * DraftOrdinal option * DateTimeOffset

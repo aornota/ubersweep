@@ -49,10 +49,8 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
         root: string,
         partitionName: PartitionName,
         getPartition: string * ILogger -> Partition<'group, 'stage, 'legacyUnconfirmed, 'playerType, 'legacyMatchEvent>,
-        mapFixtureEvents:
-            Event<Events.FixtureEvent<'stage, 'legacyUnconfirmed, 'legacyMatchEvent>> list * MapUserId
-                -> (Rvn * DateTime * IEvent * UserId) list,
-        // TODO...mapFixture: Events.Fixture<'stage, 'legacyUnconfirmed, 'legacyMatchEvent> -> Fixture<'stage, 'unconfirmed, 'matchEvent>,
+        mapFixture:
+            Events.Fixture<'stage, 'legacyUnconfirmed, 'legacyMatchEvent> -> Fixture<'stage, 'unconfirmed, 'matchEvent>,
         mapSquad: Events.Squad<'group, 'playerType> -> Squad<'group, 'playerType>,
         persistenceFactory: IPersistenceFactory,
         logger
@@ -133,9 +131,9 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
         let! drafts = partition.ReadDrafts()
 
-        (* let mappedDrafts =
+        let mappedDrafts =
             drafts
-            |> List.map (fun (guid, events, _, _) -> guid, mapDraftEvents (events, mapUserId))
+            |> List.map (fun (guid, _, draft, rvn) -> guid, mapDraft (draft, mapUserId), rvn)
 
         let writer = persistenceFactory.GetWriter<Draft, DraftEvent>(Some partitionName)
 
@@ -143,18 +141,16 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
         do
             mappedDrafts
-            |> List.iter (fun (guid, list) ->
-                list
-                |> List.iter (fun (rvn, _, event, auditUserId) ->
-                    writer.WriteEventAsync(guid, rvn, auditUserId, event, None)
-                    |> Async.RunSynchronously
-                    |> ignore)) *)
+            |> List.iter (fun (guid, draft, rvn) ->
+                writer.CreateFromSnapshotAsync(guid, rvn, (draft :> IState<Draft, DraftEvent>).SnapshotJson)
+                |> Async.RunSynchronously
+                |> ignore)
 
         let! fixtures = partition.ReadFixtures()
 
-        (* let mappedFixtures =
+        let mappedFixtures =
             fixtures
-            |> List.map (fun (guid, events, _, _) -> guid, mapFixtureEvents (events, mapUserId))
+            |> List.map (fun (guid, _, fixture, rvn) -> guid, mapFixture fixture, rvn)
 
         let writer =
             persistenceFactory.GetWriter<
@@ -168,12 +164,15 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
         do
             mappedFixtures
-            |> List.iter (fun (guid, list) ->
-                list
-                |> List.iter (fun (rvn, _, event, auditUserId) ->
-                    writer.WriteEventAsync(guid, rvn, auditUserId, event, None)
-                    |> Async.RunSynchronously
-                    |> ignore)) *)
+            |> List.iter (fun (guid, fixture, rvn) ->
+                writer.CreateFromSnapshotAsync(
+                    guid,
+                    rvn,
+                    (fixture :> IState<Fixture<'stage, 'unconfirmed, 'matchEvent>, FixtureEvent<'matchEvent>>)
+                        .SnapshotJson
+                )
+                |> Async.RunSynchronously
+                |> ignore)
 
         let! posts = partition.ReadPosts()
 
@@ -370,8 +369,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 root,
                 "2018-fifa",
                 Partition.fifa2018,
-                mapFixtureEventsFifa,
-                // TODO...mapFixtureFifa,
+                mapFixtureFifa,
                 mapSquadFifa,
                 persistenceFactory,
                 logger
@@ -390,8 +388,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 root,
                 "2019-rwc",
                 Partition.rwc2019,
-                mapFixtureEventsRwc,
-                // TODO...mapFixtureRwc,
+                mapFixtureRwc,
                 mapSquadRwc,
                 persistenceFactory,
                 logger
@@ -410,8 +407,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 root,
                 "2021-euro",
                 Partition.euro2021,
-                mapFixtureEventsEuro,
-                // TODO...mapFixtureEuro,
+                mapFixtureEuro,
                 mapSquadEuro,
                 persistenceFactory,
                 logger
@@ -430,8 +426,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 root,
                 "2022-fifa",
                 Partition.fifa2022,
-                mapFixtureEventsFifaV2,
-                // TODO...mapFixtureFifaV2,
+                mapFixtureFifaV2,
                 mapSquadFifa,
                 persistenceFactory,
                 logger
@@ -450,8 +445,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 root,
                 "2023-rwc",
                 Partition.rwc2023,
-                mapFixtureEventsRwc,
-                // TODO...mapFixtureRwc,
+                mapFixtureRwc,
                 mapSquadRwc,
                 persistenceFactory,
                 logger
@@ -470,8 +464,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 root,
                 "2024-euro",
                 Partition.euro2024,
-                mapFixtureEventsEuro,
-                // TODO...mapFixtureEuro,
+                mapFixtureEuro,
                 mapSquadEuro,
                 persistenceFactory,
                 logger

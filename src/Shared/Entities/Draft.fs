@@ -33,9 +33,7 @@ type DraftPick =
     | TeamPicked of squadId: SquadId
     | PlayerPicked of squadId: SquadId * playerId: PlayerId
 
-type UserDraftPick =
-    | TeamPick of squadId: SquadId
-    | PlayerPick of squadId: SquadId * playerId: PlayerId
+type PickedBy = UserId * DraftOrdinal option * DateTimeOffset
 
 type ProcessingEvent =
     | ProcessingStarted of seed: int
@@ -48,6 +46,23 @@ type ProcessingEvent =
     | PickPriorityChanged of userId: UserId * pickPriority: uint32
     | Picked of draftOrdinal: DraftOrdinal * draftPick: DraftPick * userId: UserId * timestamp: DateTimeOffset
 
-type PriorityChange =
-    | Increase
-    | Decrease
+type DraftInitCommand = CreateDraft of draftOrdinal: DraftOrdinal * draftType: DraftType
+
+type DraftCommand =
+    | OpenDraft
+    | CloseDraft
+    | StartProcessing
+    | FinishProcesing of
+        draftPicks: (DraftPick * PickedBy) list *
+        processingEvents: ProcessingEvent list *
+        pickPriorities: Map<UserId, uint32>
+    | OpenFreeSelection
+    | MakeFreePick of draftPick: DraftPick * userId: UserId * timestamp: DateTimeOffset
+
+type DraftCommon' = {
+    DraftOrdinal: DraftOrdinal
+    DraftStatus: DraftStatus
+    DraftPicks: (DraftPick * PickedBy) list
+    ProcessingEvents: ProcessingEvent list
+    PickPriorities: Map<UserId, uint32>
+}
