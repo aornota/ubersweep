@@ -1,42 +1,44 @@
 namespace Aornota.Ubersweep.Server.Migration
 
-open Aornota.Ubersweep.Migration
+open Aornota.Ubersweep.Migration.Domain
+open Aornota.Ubersweep.Migration.Events
 open Aornota.Ubersweep.Server.Entities
-open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Shared.Entities
 
 open System.Collections.Generic
 
-type MapUserId = Domain.UserId -> UserId
+type MapUserId = UserId' -> UserId
 
 [<AutoOpen>]
 module Mappers =
-    let private mapDraftId (Domain.DraftId guid) = DraftId.FromGuid guid
-    let private mapFixtureId (Domain.FixtureId guid) = FixtureId.FromGuid guid
-    let private mapMatchEventId (Domain.MatchEventId guid) = MatchEventId.FromGuid guid
-    let private mapPlayerId (Domain.PlayerId guid) = PlayerId.FromGuid guid
-    let private mapSquadId (Domain.SquadId guid) = SquadId.FromGuid guid
+    let private mapDraftId (DraftId'.DraftId guid) = DraftId.FromGuid guid
+    let private mapFixtureId (FixtureId'.FixtureId guid) = FixtureId.FromGuid guid
+    let private mapMatchEventId (MatchEventId'.MatchEventId guid) = MatchEventId.FromGuid guid
+    let private mapPlayerId (PlayerId'.PlayerId guid) = PlayerId.FromGuid guid
+    let private mapSquadId (SquadId'.SquadId guid) = SquadId.FromGuid guid
 
-    let private mapMatchEventsFootabll (matchEvents: Dictionary<Domain.MatchEventId, Domain.MatchEventFootball>) =
+    let private mapMatchEventsFootabll (matchEvents: Dictionary<MatchEventId', MatchEventFootball'>) =
         let mapMatchEventFootball matchEvent =
             let mapPenaltyOutcome =
                 function
-                | Domain.Scored -> Scored
-                | Domain.Missed -> PenaltyOutcome.Missed
-                | Domain.Saved(squadId, playerId) -> Saved(mapSquadId squadId, mapPlayerId playerId)
+                | PenaltyOutcome'.Scored -> PenaltyOutcome.Scored
+                | PenaltyOutcome'.Missed -> PenaltyOutcome.Missed
+                | PenaltyOutcome'.Saved(squadId, playerId) ->
+                    PenaltyOutcome.Saved(mapSquadId squadId, mapPlayerId playerId)
 
             match matchEvent with
-            | Domain.Goal(squadId, playerId, assistedBy) ->
+            | MatchEventFootball'.Goal(squadId, playerId, assistedBy) ->
                 Goal(mapSquadId squadId, mapPlayerId playerId, assistedBy |> Option.map mapPlayerId)
-            | Domain.OwnGoal(squadId, playerId) -> OwnGoal(mapSquadId squadId, mapPlayerId playerId)
-            | Domain.Penalty(squadId, playerId, penaltyOutcome) ->
+            | MatchEventFootball'.OwnGoal(squadId, playerId) -> OwnGoal(mapSquadId squadId, mapPlayerId playerId)
+            | MatchEventFootball'.Penalty(squadId, playerId, penaltyOutcome) ->
                 Penalty(mapSquadId squadId, mapPlayerId playerId, mapPenaltyOutcome penaltyOutcome)
-            | Domain.YellowCard(squadId, playerId) ->
+            | MatchEventFootball'.YellowCard(squadId, playerId) ->
                 MatchEventFootball.YellowCard(mapSquadId squadId, mapPlayerId playerId)
-            | Domain.RedCard(squadId, playerId) -> MatchEventFootball.RedCard(mapSquadId squadId, mapPlayerId playerId)
-            | Domain.CleanSheet(squadId, playerId) -> CleanSheet(mapSquadId squadId, mapPlayerId playerId)
-            | Domain.PenaltyShootout(homeScore, awayScore) -> PenaltyShootout(homeScore, awayScore)
-            | Domain.ManOfTheMatch(squadId, playerId) ->
+            | MatchEventFootball'.RedCard(squadId, playerId) ->
+                MatchEventFootball.RedCard(mapSquadId squadId, mapPlayerId playerId)
+            | MatchEventFootball'.CleanSheet(squadId, playerId) -> CleanSheet(mapSquadId squadId, mapPlayerId playerId)
+            | MatchEventFootball'.PenaltyShootout(homeScore, awayScore) -> PenaltyShootout(homeScore, awayScore)
+            | MatchEventFootball'.ManOfTheMatch(squadId, playerId) ->
                 MatchEventFootball.ManOfTheMatch(mapSquadId squadId, mapPlayerId playerId)
 
         matchEvents
@@ -44,7 +46,7 @@ module Mappers =
         |> List.map (fun kvp -> mapMatchEventId kvp.Key, mapMatchEventFootball kvp.Value)
         |> Map.ofList
 
-    let private mapPLayersFootball (players: Dictionary<Domain.PlayerId, Player<PlayerTypeFootball>>) =
+    let private mapPLayersFootball (players: Dictionary<PlayerId', Player<PlayerTypeFootball>>) =
         players
         |> List.ofSeq
         |> List.map (fun kvp -> mapPlayerId kvp.Key, kvp.Value)
@@ -52,22 +54,22 @@ module Mappers =
 
     let private mapParticipant mapUnconfirmed =
         function
-        | Domain.Confirmed squadId -> Confirmed(mapSquadId squadId)
-        | Domain.Unconfirmed unconfirmed -> Unconfirmed(mapUnconfirmed unconfirmed)
+        | Participant'.Confirmed squadId -> Confirmed(mapSquadId squadId)
+        | Participant'.Unconfirmed unconfirmed -> Unconfirmed(mapUnconfirmed unconfirmed)
 
-    let mapDraft (draft: Events.Draft, mapUserId: MapUserId) =
+    let mapDraft (draft: Draft', mapUserId: MapUserId) =
         let mapDraftPick =
             function
-            | Domain.TeamPicked sqaudId -> TeamPicked(mapSquadId sqaudId)
-            | Domain.PlayerPicked(squadId, playerId) -> PlayerPicked(mapSquadId squadId, mapPlayerId playerId)
+            | DraftPick'.TeamPicked sqaudId -> TeamPicked(mapSquadId sqaudId)
+            | DraftPick'.PlayerPicked(squadId, playerId) -> PlayerPicked(mapSquadId squadId, mapPlayerId playerId)
 
-        let mapDraftPicks (draftPicks: (Domain.DraftPick * Domain.PickedBy) list) =
+        let mapDraftPicks (draftPicks: (DraftPick' * PickedBy') list) =
             draftPicks
             |> List.map (fun (draftPick, (userId, draftOrdinal, dateTimeOffset)) ->
                 mapDraftPick draftPick, (mapUserId userId, draftOrdinal, dateTimeOffset))
 
-        let mapProcessingEvent (event: Domain.ProcessingEvent) =
-            let mapIgnoredPlayers (ignored: (Domain.UserId * (Domain.SquadId * Domain.PlayerId) list) list) =
+        let mapProcessingEvent (event: ProcessingEvent') =
+            let mapIgnoredPlayers (ignored: (UserId' * (SquadId' * PlayerId') list) list) =
                 ignored
                 |> List.map (fun (userId, pairs) ->
                     let mappedPairs =
@@ -76,28 +78,30 @@ module Mappers =
 
                     mapUserId userId, mappedPairs)
 
-            let mapIgnoredDraftPicks (ignored: (Domain.UserId * Domain.DraftPick list) list) =
+            let mapIgnoredDraftPicks (ignored: (UserId' * DraftPick' list) list) =
                 ignored
                 |> List.map (fun (userId, draftPicks) -> mapUserId userId, draftPicks |> List.map mapDraftPick)
 
             match event with
-            | Domain.ProcessingStarted seed -> ProcessingStarted seed
-            | Domain.WithdrawnPlayersIgnored ignored -> WithdrawnPlayersIgnored(mapIgnoredPlayers ignored)
-            | Domain.RoundStarted round -> RoundStarted round
-            | Domain.AlreadyPickedIgnored ignored -> AlreadyPickedIgnored(mapIgnoredDraftPicks ignored)
-            | Domain.NoLongerRequiredIgnored ignored -> NoLongerRequiredIgnored(mapIgnoredDraftPicks ignored)
-            | Domain.UncontestedPick(draftPick, userId) -> UncontestedPick(mapDraftPick draftPick, mapUserId userId)
-            | Domain.ContestedPick(draftPick, userDetails, winner) ->
+            | ProcessingEvent'.ProcessingStarted seed -> ProcessingStarted seed
+            | ProcessingEvent'.WithdrawnPlayersIgnored ignored -> WithdrawnPlayersIgnored(mapIgnoredPlayers ignored)
+            | ProcessingEvent'.RoundStarted round -> RoundStarted round
+            | ProcessingEvent'.AlreadyPickedIgnored ignored -> AlreadyPickedIgnored(mapIgnoredDraftPicks ignored)
+            | ProcessingEvent'.NoLongerRequiredIgnored ignored -> NoLongerRequiredIgnored(mapIgnoredDraftPicks ignored)
+            | ProcessingEvent'.UncontestedPick(draftPick, userId) ->
+                UncontestedPick(mapDraftPick draftPick, mapUserId userId)
+            | ProcessingEvent'.ContestedPick(draftPick, userDetails, winner) ->
                 let userDetails =
                     userDetails
                     |> List.map (fun (userId, pickPriority, random) -> mapUserId userId, pickPriority, random)
 
                 ContestedPick(mapDraftPick draftPick, userDetails, mapUserId winner)
-            | Domain.PickPriorityChanged(userId, pickPriority) -> PickPriorityChanged(mapUserId userId, pickPriority)
-            | Domain.Picked(draftOrdinal, draftPick, userId, timestamp) ->
+            | ProcessingEvent'.PickPriorityChanged(userId, pickPriority) ->
+                PickPriorityChanged(mapUserId userId, pickPriority)
+            | ProcessingEvent'.Picked(draftOrdinal, draftPick, userId, timestamp) ->
                 Picked(draftOrdinal, mapDraftPick draftPick, mapUserId userId, timestamp)
 
-        let mapPickPriorities (pickPriorities: Dictionary<Domain.UserId, uint32>) =
+        let mapPickPriorities (pickPriorities: Dictionary<UserId', uint32>) =
             pickPriorities
             |> List.ofSeq
             |> List.map (fun kvp -> mapUserId kvp.Key, kvp.Value)
@@ -105,13 +109,16 @@ module Mappers =
 
         let mapDraftStatus =
             function
-            | Domain.ConstrainedDraft(draftOrdinal, Domain.PendingOpen(starts, ends)) ->
+            | DraftStatus'.ConstrainedDraft(draftOrdinal, ConstrainedStatus'.PendingOpen(starts, ends)) ->
                 ConstrainedDraft(draftOrdinal, PendingOpen(starts, ends))
-            | Domain.ConstrainedDraft(draftOrdinal, Domain.Opened ends) -> ConstrainedDraft(draftOrdinal, Opened ends)
-            | Domain.ConstrainedDraft(draftOrdinal, Domain.PendingProcessing) ->
+            | DraftStatus'.ConstrainedDraft(draftOrdinal, ConstrainedStatus'.Opened ends) ->
+                ConstrainedDraft(draftOrdinal, Opened ends)
+            | DraftStatus'.ConstrainedDraft(draftOrdinal, ConstrainedStatus'.PendingProcessing) ->
                 ConstrainedDraft(draftOrdinal, PendingProcessing)
-            | Domain.ConstrainedDraft(draftOrdinal, Domain.Processing _) -> ConstrainedDraft(draftOrdinal, Processing)
-            | Domain.ConstrainedDraft(draftOrdinal, Domain.Processed(draftPicks, processingEvents, pickPriorities)) ->
+            | DraftStatus'.ConstrainedDraft(draftOrdinal, ConstrainedStatus'.Processing _) ->
+                ConstrainedDraft(draftOrdinal, Processing)
+            | DraftStatus'.ConstrainedDraft(draftOrdinal,
+                                            ConstrainedStatus'.Processed(draftPicks, processingEvents, pickPriorities)) ->
                 ConstrainedDraft(
                     draftOrdinal,
                     Processed(
@@ -120,8 +127,9 @@ module Mappers =
                         mapPickPriorities pickPriorities
                     )
                 )
-            | Domain.UnconstrainedDraft Domain.PendingFreeSelection -> UnconstrainedDraft PendingFreeSelection
-            | Domain.UnconstrainedDraft(Domain.FreeSelection draftPicks) ->
+            | DraftStatus'.UnconstrainedDraft UnconstrainedStatus'.PendingFreeSelection ->
+                UnconstrainedDraft PendingFreeSelection
+            | DraftStatus'.UnconstrainedDraft(UnconstrainedStatus'.FreeSelection draftPicks) ->
                 UnconstrainedDraft(FreeSelection(mapDraftPicks draftPicks))
 
         {
@@ -130,12 +138,12 @@ module Mappers =
             }
         }
 
-    let mapFixtureEuro (fixture: Events.Fixture<StageEuro, Domain.UnconfirmedEuro, Domain.MatchEventFootball>) =
+    let mapFixtureEuro (fixture: Fixture'<StageEuro, UnconfirmedEuro', MatchEventFootball'>) =
         let mapUnconfirmedEuro =
             function
-            | Domain.UnconfirmedEuro.Winner stage -> UnconfirmedEuro.Winner stage
-            | Domain.UnconfirmedEuro.RunnerUp group -> UnconfirmedEuro.RunnerUp group
-            | Domain.UnconfirmedEuro.ThirdPlace groups -> UnconfirmedEuro.ThirdPlace groups
+            | UnconfirmedEuro'.Winner stage -> UnconfirmedEuro.Winner stage
+            | UnconfirmedEuro'.RunnerUp group -> UnconfirmedEuro.RunnerUp group
+            | UnconfirmedEuro'.ThirdPlace groups -> UnconfirmedEuro.ThirdPlace groups
 
         let mapParticipantEuro = mapParticipant mapUnconfirmedEuro
 
@@ -150,12 +158,12 @@ module Mappers =
             }
         }
 
-    let mapFixtureFifa (fixture: Events.Fixture<StageFifa, Domain.UnconfirmedFifa, Domain.MatchEventFootball>) =
+    let mapFixtureFifa (fixture: Fixture'<StageFifa, UnconfirmedFifa', MatchEventFootball'>) =
         let mapUnconfirmedFifa =
             function
-            | Domain.UnconfirmedFifa.Winner stage -> Winner stage
-            | Domain.UnconfirmedFifa.RunnerUp group -> RunnerUp group
-            | Domain.UnconfirmedFifa.Loser semiFinalOrdinal -> Loser(StageFifa.SemiFinal semiFinalOrdinal)
+            | UnconfirmedFifa'.Winner stage -> Winner stage
+            | UnconfirmedFifa'.RunnerUp group -> RunnerUp group
+            | UnconfirmedFifa'.Loser semiFinalOrdinal -> Loser(StageFifa.SemiFinal semiFinalOrdinal)
 
         let mapParticipantFifa = mapParticipant mapUnconfirmedFifa
 
@@ -170,12 +178,12 @@ module Mappers =
             }
         }
 
-    let mapFixtureFifaV2 (fixture: Events.Fixture<StageFifa, Domain.UnconfirmedFifaV2, Domain.MatchEventFootball>) =
+    let mapFixtureFifaV2 (fixture: Fixture'<StageFifa, UnconfirmedFifaV2', MatchEventFootball'>) =
         let mapUnconfirmedFifaV2 =
             function
-            | Domain.UnconfirmedFifaV2.Winner stage -> Winner stage
-            | Domain.UnconfirmedFifaV2.RunnerUp group -> RunnerUp group
-            | Domain.UnconfirmedFifaV2.Loser stage -> Loser stage
+            | UnconfirmedFifaV2'.Winner stage -> Winner stage
+            | UnconfirmedFifaV2'.RunnerUp group -> RunnerUp group
+            | UnconfirmedFifaV2'.Loser stage -> Loser stage
 
         let mapParticipantFifaV2 = mapParticipant mapUnconfirmedFifaV2
 
@@ -190,21 +198,20 @@ module Mappers =
             }
         }
 
-    let mapFixtureRwc (fixture: Events.Fixture<StageRwc, Domain.UnconfirmedRwc, Domain.MatchEventRugby>) =
-        let mapMatchEventsRugby (matchEvents: Dictionary<Domain.MatchEventId, Domain.MatchEventRugby>) =
+    let mapFixtureRwc (fixture: Fixture'<StageRwc, UnconfirmedRwc', MatchEventRugby'>) =
+        let mapMatchEventsRugby (matchEvents: Dictionary<MatchEventId', MatchEventRugby'>) =
             let mapMatchEventRugby matchEvent =
                 match matchEvent with
-                | Domain.Try(squadId, playerId) -> Try(mapSquadId squadId, mapPlayerId playerId)
-                | Domain.PenaltyTry squadId -> PenaltyTry(mapSquadId squadId)
-                | Domain.PenaltyKick(squadId, playerId, kickOutcome) ->
+                | MatchEventRugby'.Try(squadId, playerId) -> Try(mapSquadId squadId, mapPlayerId playerId)
+                | MatchEventRugby'.PenaltyTry squadId -> PenaltyTry(mapSquadId squadId)
+                | MatchEventRugby'.PenaltyKick(squadId, playerId, kickOutcome) ->
                     PenaltyKick(mapSquadId squadId, mapPlayerId playerId, kickOutcome)
-                | Domain.Conversion(squadId, playerId, kickOutcome) ->
+                | MatchEventRugby'.Conversion(squadId, playerId, kickOutcome) ->
                     Conversion(mapSquadId squadId, mapPlayerId playerId, kickOutcome)
-                | Domain.DropGoal(squadId, playerId) -> DropGoal(mapSquadId squadId, mapPlayerId playerId)
-                | Domain.MatchEventRugby.YellowCard(squadId, playerId) ->
-                    YellowCard(mapSquadId squadId, mapPlayerId playerId)
-                | Domain.MatchEventRugby.RedCard(squadId, playerId) -> RedCard(mapSquadId squadId, mapPlayerId playerId)
-                | Domain.MatchEventRugby.ManOfTheMatch(squadId, playerId) ->
+                | MatchEventRugby'.DropGoal(squadId, playerId) -> DropGoal(mapSquadId squadId, mapPlayerId playerId)
+                | MatchEventRugby'.YellowCard(squadId, playerId) -> YellowCard(mapSquadId squadId, mapPlayerId playerId)
+                | MatchEventRugby'.RedCard(squadId, playerId) -> RedCard(mapSquadId squadId, mapPlayerId playerId)
+                | MatchEventRugby'.ManOfTheMatch(squadId, playerId) ->
                     ManOfTheMatch(mapSquadId squadId, mapPlayerId playerId)
 
             matchEvents
@@ -214,9 +221,9 @@ module Mappers =
 
         let mapUnconfirmedRwc =
             function
-            | Domain.UnconfirmedRwc.GroupRunnerUp group -> RunnerUp group
-            | Domain.UnconfirmedRwc.StageWinner stage -> Winner stage
-            | Domain.UnconfirmedRwc.SemiFinalLoser semiFinalOrdinal -> Loser(SemiFinal semiFinalOrdinal)
+            | GroupRunnerUp group -> RunnerUp group
+            | StageWinner stage -> Winner stage
+            | SemiFinalLoser semiFinalOrdinal -> Loser(SemiFinal semiFinalOrdinal)
 
         let mapParticipantRwc = mapParticipant mapUnconfirmedRwc
 
@@ -231,11 +238,11 @@ module Mappers =
             }
         }
 
-    let mapPost (post: Events.Post, mapUserId: MapUserId) =
+    let mapPost (post: Post', mapUserId: MapUserId) =
         let mapPostType =
             function
-            | Domain.Standard -> Standard
-            | Domain.MatchResult fixtureId -> MatchResult(mapFixtureId fixtureId)
+            | PostType'.Standard -> Standard
+            | PostType'.MatchResult fixtureId -> MatchResult(mapFixtureId fixtureId)
 
         {
             PostCommon = {
@@ -247,7 +254,7 @@ module Mappers =
             UserId = mapUserId post.UserId
         }
 
-    let mapSquadEuro (squad: Events.Squad<GroupAToF, PlayerTypeFootball>) = {
+    let mapSquadEuro (squad: Squad'<GroupAToF, PlayerTypeFootball>) = {
         SquadCommon = {
             SquadName = squad.SquadName
             Group = squad.Group
@@ -258,7 +265,7 @@ module Mappers =
         }
     }
 
-    let mapSquadFifa (squad: Events.Squad<GroupAToH, PlayerTypeFootball>) = {
+    let mapSquadFifa (squad: Squad'<GroupAToH, PlayerTypeFootball>) = {
         SquadCommon = {
             SquadName = squad.SquadName
             Group = squad.Group
@@ -269,8 +276,8 @@ module Mappers =
         }
     }
 
-    let mapSquadRwc (squad: Events.Squad<GroupAToD, PlayerTypeRugby>) =
-        let mapPLayersRugby (players: Dictionary<Domain.PlayerId, Player<PlayerTypeRugby>>) =
+    let mapSquadRwc (squad: Squad'<GroupAToD, PlayerTypeRugby>) =
+        let mapPLayersRugby (players: Dictionary<PlayerId', Player<PlayerTypeRugby>>) =
             players
             |> List.ofSeq
             |> List.map (fun kvp -> mapPlayerId kvp.Key, kvp.Value)
@@ -287,7 +294,7 @@ module Mappers =
             }
         }
 
-    let mapUser (user: Events.User) = {
+    let mapUser (user: User') = {
         UserCommon = {
             UserName = user.UserName
             UserType = user.UserType
@@ -297,12 +304,12 @@ module Mappers =
         PasswordHash = user.PasswordHash
     }
 
-    let mapUserDraft (userDraft: Events.UserDraft, mapUserId: MapUserId) =
-        let mapUserDraftPicks (userDraftPicks: Dictionary<Domain.UserDraftPick, int>) =
+    let mapUserDraft (userDraft: UserDraft', mapUserId: MapUserId) =
+        let mapUserDraftPicks (userDraftPicks: Dictionary<UserDraftPick', int>) =
             let mapUserDraftPick =
                 function
-                | Domain.TeamPick sqaudId -> TeamPick(mapSquadId sqaudId)
-                | Domain.PlayerPick(squadId, playerId) -> PlayerPick(mapSquadId squadId, mapPlayerId playerId)
+                | UserDraftPick'.TeamPick sqaudId -> TeamPick(mapSquadId sqaudId)
+                | UserDraftPick'.PlayerPick(squadId, playerId) -> PlayerPick(mapSquadId squadId, mapPlayerId playerId)
 
             userDraftPicks
             |> List.ofSeq

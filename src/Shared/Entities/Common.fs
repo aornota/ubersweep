@@ -1,4 +1,4 @@
-namespace Aornota.Ubersweep.Shared.Common
+namespace Aornota.Ubersweep.Shared.Entities
 
 type GroupAToD =
     | GroupA

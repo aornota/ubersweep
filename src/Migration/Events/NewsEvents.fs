@@ -6,25 +6,25 @@ open Aornota.Ubersweep.Shared.Common
 
 open System
 
-type NewsEvent =
+type NewsEvent' =
     | PostCreated of
-        postId: PostId *
-        userId: UserId *
-        postType: PostType *
+        postId: PostId' *
+        userId: UserId' *
+        postType: PostType' *
         messageText: Markdown *
         timestamp: DateTimeOffset
-    | PostChanged of postId: PostId * messageText: Markdown
-    | PostRemoved of postId: PostId
+    | PostChanged of postId: PostId' * messageText: Markdown
+    | PostRemoved of postId: PostId'
 
-type Post = {
-    UserId: UserId
-    PostType: PostType
+type Post' = {
+    UserId: UserId'
+    PostType: PostType'
     MessageText: Markdown
     Timestamp: DateTimeOffset
     Removed: bool
 }
 
-type NewsHelper() =
+type NewsHelper'() =
     let rec applyEvents events postAndRvn =
         match postAndRvn, events with
         | None, PostCreated(_, userId, postType, messageText, timestamp) :: t ->
@@ -44,9 +44,9 @@ type NewsHelper() =
             applyEvents t (Some({ post with MessageText = messageText }, rvn.NextRvn))
         | Some(post, rvn), PostRemoved _ :: t -> applyEvents t (Some({ post with Removed = true }, rvn.NextRvn))
         | Some postAndRvn, [] -> Ok postAndRvn
-        | None, [] -> Error $"No initial {nameof NewsEvent}"
-        | None, h :: _ -> Error $"Invalid initial {nameof NewsEvent}: {h}"
-        | Some _, PostCreated _ :: _ -> Error $"Invalid non-initial {nameof NewsEvent}: {nameof PostCreated}"
+        | None, [] -> Error $"No initial {nameof NewsEvent'}"
+        | None, h :: _ -> Error $"Invalid initial {nameof NewsEvent'}: {h}"
+        | Some _, PostCreated _ :: _ -> Error $"Invalid non-initial {nameof NewsEvent'}: {nameof PostCreated}"
 
-    interface IHelper<NewsEvent, Post> with
+    interface IHelper<NewsEvent', Post'> with
         member _.ApplyEvents events = applyEvents events None

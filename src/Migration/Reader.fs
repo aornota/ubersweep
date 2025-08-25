@@ -5,7 +5,6 @@ open Aornota.Ubersweep.Migration.Domain
 open Aornota.Ubersweep.Shared.Common
 
 open FsToolkit.ErrorHandling
-open Serilog
 open System
 open System.IO
 
@@ -13,14 +12,14 @@ type PersistedEvent = {
     Rvn: Rvn
     TimestampUtc: DateTime
     EventJson: Json
-    AuditUserId: UserId
+    AuditUserId: UserId'
 }
 
 type Event<'event> = {
     Rvn: Rvn
     TimestampUtc: DateTime
     Event: 'event
-    AuditUserId: UserId
+    AuditUserId: UserId'
 }
 
 type private DeserializationHelper(useLegacyDeserializer) =
@@ -151,17 +150,17 @@ type Reader<'event>(path: string, useLegacyDeserializer, logger) =
             Error [ $"Unexpected error reading all for {path}: {exn.Message}" ]
 
     member _.ReadAll() =
-        logger.Verbose("Reading {event}s for all...", typeof<'event>.Name)
+        logger.Debug("Reading {type}s for all...", sanitize typeof<'event>)
 
         let result = tryReadAll ()
 
         match result with
-        | Ok list -> logger.Verbose("...{event}s read for {length} file/s", typeof<'event>.Name, list.Length)
+        | Ok list -> logger.Debug("...{type}s read for {length} file/s", sanitize typeof<'event>, list.Length)
         | Error errors ->
             logger.Error(
-                "...{length} error/s reading {event}s for all: {errors}",
+                "...{length} error/s reading {type}s for all: {errors}",
                 errors.Length,
-                typeof<'event>.Name,
+                sanitize typeof<'event>,
                 errors
             )
 

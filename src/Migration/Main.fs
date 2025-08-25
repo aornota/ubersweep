@@ -34,14 +34,14 @@ module Main =
         rwc2019.ReadUsers() |> ignore<Result<_, _>>
         rwc2019.ReadUserDrafts() |> ignore<Result<_, _>>
 
-        let euro2021 = Partition.euro2021 (Path.Combine(root, "2021-euro"), logger)
+        let euro2020 = Partition.euro2020 (Path.Combine(root, "2020-euro"), logger)
 
-        euro2021.ReadDrafts() |> ignore<Result<_, _>>
-        euro2021.ReadFixtures() |> ignore<Result<_, _>>
-        euro2021.ReadPosts() |> ignore<Result<_, _>>
-        euro2021.ReadSquads() |> ignore<Result<_, _>>
-        euro2021.ReadUsers() |> ignore<Result<_, _>>
-        euro2021.ReadUserDrafts() |> ignore<Result<_, _>>
+        euro2020.ReadDrafts() |> ignore<Result<_, _>>
+        euro2020.ReadFixtures() |> ignore<Result<_, _>>
+        euro2020.ReadPosts() |> ignore<Result<_, _>>
+        euro2020.ReadSquads() |> ignore<Result<_, _>>
+        euro2020.ReadUsers() |> ignore<Result<_, _>>
+        euro2020.ReadUserDrafts() |> ignore<Result<_, _>>
 
         let fifa2022 = Partition.fifa2022 (Path.Combine(root, "2022-fifa"), logger)
 

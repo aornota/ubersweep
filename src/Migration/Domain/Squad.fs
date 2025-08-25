@@ -1,17 +1,15 @@
 namespace Aornota.Ubersweep.Migration.Domain
 
-open Aornota.Ubersweep.Shared.Common
+open Aornota.Ubersweep.Shared.Entities
 
 open System
 
-type SquadId =
+type SquadId' =
     | SquadId of guid: Guid
 
     static member Create() = Guid.NewGuid() |> SquadId
 
-type PlayerId =
+type PlayerId' =
     | PlayerId of guid: Guid
 
     static member Create() = Guid.NewGuid() |> PlayerId
-
-type PickedBy = UserId * DraftOrdinal option * DateTimeOffset

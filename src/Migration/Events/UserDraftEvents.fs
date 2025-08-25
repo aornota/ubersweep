@@ -1,25 +1,25 @@
 namespace Aornota.Ubersweep.Migration.Events
 
 open Aornota.Ubersweep.Migration.Common
+open Aornota.Ubersweep.Migration.Domain
 open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Shared.Entities
-open Aornota.Ubersweep.Migration.Domain // after Aornota.Ubersweep.Shared.Entities to ensure migration Ids used
 
 open System.Collections.Generic
 
-type UserDraftEvent =
-    | UserDraftCreated of userDraftId: UserDraftId * userId: UserId * draftId: DraftId
-    | Drafted of userDraftId: UserDraftId * userDraftPick: UserDraftPick
-    | Undrafted of userDraftId: UserDraftId * userDraftPick: UserDraftPick
-    | PriorityChanged of userDraftId: UserDraftId * userDraftPick: UserDraftPick * priorityChange: PriorityChange
+type UserDraftEvent' =
+    | UserDraftCreated of userDraftId: UserDraftId' * userId: UserId' * draftId: DraftId'
+    | Drafted of userDraftId: UserDraftId' * userDraftPick: UserDraftPick'
+    | Undrafted of userDraftId: UserDraftId' * userDraftPick: UserDraftPick'
+    | PriorityChanged of userDraftId: UserDraftId' * userDraftPick: UserDraftPick' * priorityChange: PriorityChange
 
-type UserDraft = {
-    UserDraftKey: UserId * DraftId
-    UserDraftPicks: Dictionary<UserDraftPick, int>
+type UserDraft' = {
+    UserDraftKey: UserId' * DraftId'
+    UserDraftPicks: Dictionary<UserDraftPick', int>
 }
 
-type UserDraftHelper() =
-    let rec applyEvents (events: UserDraftEvent list) userDraftsAndRvn =
+type UserDraftHelper'() =
+    let rec applyEvents events userDraftsAndRvn =
         match userDraftsAndRvn, events with
         | None, UserDraftCreated(_, userId, draftId) :: t ->
             applyEvents
@@ -27,7 +27,7 @@ type UserDraftHelper() =
                 (Some(
                     {
                         UserDraftKey = userId, draftId
-                        UserDraftPicks = Dictionary<UserDraftPick, int>()
+                        UserDraftPicks = Dictionary<UserDraftPick', int>()
                     },
                     Rvn.InitialRvn
                 ))
@@ -37,10 +37,10 @@ type UserDraftHelper() =
 
                 applyEvents t (Some(userDraft, rvn.NextRvn))
             else
-                Error $"Invalid {nameof UserDraftEvent}: {nameof Drafted} when already drafted"
+                Error $"Invalid {nameof UserDraftEvent'}: {nameof Drafted} when already drafted"
         | Some(userDraft, rvn), Undrafted(_, userDraftPick) :: t ->
             if userDraft.UserDraftPicks.ContainsKey userDraftPick then
-                let userDraftPicks = Dictionary<UserDraftPick, int>()
+                let userDraftPicks = Dictionary<UserDraftPick', int>()
                 userDraft.UserDraftPicks.Remove userDraftPick |> ignore
 
                 userDraft.UserDraftPicks
@@ -59,10 +59,10 @@ type UserDraftHelper() =
                         rvn.NextRvn
                     ))
             else
-                Error $"Invalid {nameof UserDraftEvent}: {nameof Undrafted} when not drafted"
+                Error $"Invalid {nameof UserDraftEvent'}: {nameof Undrafted} when not drafted"
         | Some(userDraft, rvn), PriorityChanged(_, userDraftPick, priorityChange) :: t ->
             if userDraft.UserDraftPicks.ContainsKey userDraftPick then
-                let userDraftPicks = Dictionary<UserDraftPick, int>()
+                let userDraftPicks = Dictionary<UserDraftPick', int>()
 
                 let adjustment =
                     match priorityChange with
@@ -92,12 +92,12 @@ type UserDraftHelper() =
                         rvn.NextRvn
                     ))
             else
-                Error $"Invalid {nameof UserDraftEvent}: {nameof PriorityChanged} when not drafted"
+                Error $"Invalid {nameof UserDraftEvent'}: {nameof PriorityChanged} when not drafted"
         | Some userDraftsAndRvn, [] -> Ok userDraftsAndRvn
-        | None, [] -> Error $"No initial {nameof UserDraftEvent}"
-        | None, h :: _ -> Error $"Invalid initial {nameof UserDraftEvent}: {h}"
+        | None, [] -> Error $"No initial {nameof UserDraftEvent'}"
+        | None, h :: _ -> Error $"Invalid initial {nameof UserDraftEvent'}: {h}"
         | Some _, UserDraftCreated _ :: _ ->
-            Error $"Invalid non-initial {nameof UserDraftEvent}: {nameof UserDraftCreated}"
+            Error $"Invalid non-initial {nameof UserDraftEvent'}: {nameof UserDraftCreated}"
 
-    interface IHelper<UserDraftEvent, UserDraft> with
+    interface IHelper<UserDraftEvent', UserDraft'> with
         member _.ApplyEvents events = applyEvents events None

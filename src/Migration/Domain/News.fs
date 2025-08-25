@@ -2,11 +2,11 @@ namespace Aornota.Ubersweep.Migration.Domain
 
 open System
 
-type PostId =
+type PostId' =
     | PostId of guid: Guid
 
     static member Create() = Guid.NewGuid() |> PostId
 
-type PostType =
+type PostType' =
     | Standard
-    | MatchResult of fixtureId: FixtureId
+    | MatchResult of fixtureId: FixtureId'
