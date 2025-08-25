@@ -62,7 +62,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
     let partition = getPartition (Path.Combine(root, partitionName), logger)
 
     member private _.Check<'state, 'event when 'state :> IState<'state, 'event>>() = asyncResult {
-        logger.Debug("Checking {type}s for {partitionName}...", sanitize typeof<'event>, partitionName)
+        logger.Debug("...checking {type}s for {partitionName}...", sanitize typeof<'event>, partitionName)
         let reader = persistenceFactory.GetReader<'state, 'event>(Some partitionName)
         let! all = reader.ReadAllAsync()
 
@@ -77,7 +77,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 Ok()
             else
                 logger.Error(
-                    "...cannot migrate as {type}s already exist for {partitionName}",
+                    "...cannot migrate as {type}s already exist for {partitionName} (or other error)",
                     sanitize typeof<'event>,
                     partitionName
                 )
@@ -102,7 +102,9 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
     member _.ReadUsers() = partition.ReadUsers()
 
     member _.MigrateAsync(mapUserId: MapUserId) = asyncResult {
-        logger.Debug("Migrating {Draft}s for {partitionName}...", nameof Draft, partitionName)
+        logger.Debug("Migrating {partitionName}...", partitionName)
+
+        logger.Debug("...migrating {Draft}s for {partitionName}...", nameof Draft, partitionName)
         let! drafts = partition.ReadDrafts()
         let writer = persistenceFactory.GetWriter<Draft, DraftEvent>(Some partitionName)
 
@@ -131,7 +133,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
                 Error errors
 
-        logger.Debug("Migrating {Fixture}s for {partitionName}...", nameof Fixture, partitionName)
+        logger.Debug("...migrating {Fixture}s for {partitionName}...", nameof Fixture, partitionName)
         let! fixtures = partition.ReadFixtures()
 
         let writer =
@@ -169,7 +171,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
                 Error errors
 
-        logger.Debug("Migrating {Post}s for {partitionName}...", nameof Post, partitionName)
+        logger.Debug("...migrating {Post}s for {partitionName}...", nameof Post, partitionName)
         let! posts = partition.ReadPosts()
         let writer = persistenceFactory.GetWriter<Post, PostEvent>(Some partitionName)
 
@@ -198,7 +200,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
                 Error errors
 
-        logger.Debug("Migrating {Squad}s for {partitionName}...", nameof Squad, partitionName)
+        logger.Debug("...migrating {Squad}s for {partitionName}...", nameof Squad, partitionName)
         let! squads = partition.ReadSquads()
 
         let writer =
@@ -230,7 +232,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
                 Error errors
 
-        logger.Debug("Migrating {UserDraft}s for {partitionName}...", nameof UserDraft, partitionName)
+        logger.Debug("...migrating {UserDraft}s for {partitionName}...", nameof UserDraft, partitionName)
         let! userDrafts = partition.ReadUserDrafts()
 
         let writer =
@@ -336,7 +338,6 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
     let canMigrate = migrateOnStartUp && isConfiguredRoot
 
     let writeUsersAsync (users: (Guid * User' * Rvn) list) = asyncResult {
-        logger.Debug("Writing {Users}s...", nameof User)
         let writer = persistenceFactory.GetWriter<User, UserEvent> None
 
         let! writeUsersResults =
@@ -348,10 +349,36 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         let! _ =
             match writeUsersResults |> List.ofArray |> List.sequenceResultA with
             | Ok _ ->
-                logger.Debug("...{Users}s written", nameof User)
+                logger.Debug("...{User}s written", nameof User)
                 Ok()
             | Error errors ->
                 logger.Error("...errors writing {User}s: {errors}", nameof User, errors)
+
+                Error errors
+
+        return ()
+    }
+
+    let writeSweepstakesAsync (sweepstakes: Sweepstake list) = asyncResult {
+        let writer = persistenceFactory.GetWriter<Sweepstake, SweepstakeEvent> None
+
+        let! writeSweepstakesResults =
+            sweepstakes
+            |> List.map (fun sweepstake ->
+                writer.CreateFromSnapshotAsync(
+                    Guid.NewGuid(),
+                    Rvn.InitialRvn,
+                    (sweepstake :> IState<Sweepstake, SweepstakeEvent>).SnapshotJson
+                ))
+            |> Async.Parallel
+
+        let! _ =
+            match writeSweepstakesResults |> List.ofArray |> List.sequenceResultA with
+            | Ok _ ->
+                logger.Debug("...{Sweepstake}s written", nameof Sweepstake)
+                Ok()
+            | Error errors ->
+                logger.Error("...errors writing {Sweepstake}s: {errors}", nameof Sweepstake, errors)
 
                 Error errors
 
@@ -369,12 +396,13 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
 
         let! _ =
             if canMigrate then
-                logger.Debug("Checking {User}s...", nameof User)
+                logger.Debug "Starting migration..."
                 Ok()
             else
                 logger.Debug "Skipping migration"
                 Error []
 
+        logger.Debug("...checking {User}s...", nameof User)
         let reader = persistenceFactory.GetReader<User, UserEvent> None
         let! all = reader.ReadAllAsync()
 
@@ -386,7 +414,84 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 logger.Error("...cannot migrate as {User}s already exist", nameof User)
                 Error []
 
-        // TODO-MIGRATION: Stop hard-coding partition names...
+        logger.Debug("...checking {Sweepstake}s...", nameof Sweepstake)
+        let reader = persistenceFactory.GetReader<Sweepstake, SweepstakeEvent> None
+        let! all = reader.ReadAllAsync()
+
+        let! _ =
+            if all.Length = 0 then
+                logger.Debug("...can migrate as {Sweepstake}s do not already exist", nameof Sweepstake)
+                Ok()
+            else
+                logger.Error("...cannot migrate as {Sweepstake}s already exist", nameof Sweepstake)
+                Error []
+
+        let fifa2018 = {
+            SweepstakeCommon = {
+                SweepstakeType = Fifa
+                Year = 2018u
+                Description = "The world-famous World Cup 2018 sweepstake"
+                Logo =
+                    "https://github.com/aornota/sweepstake-2018/blob/master/src/resources/images/sweepstake-2018-24x24.png"
+                MaxPlayersPerSquad = 23u
+                Status = Archived
+            }
+        }
+
+        let rwc2019 = {
+            SweepstakeCommon = {
+                SweepstakeType = Rwc
+                Year = 2019u
+                Description = "The world-famous Rugby World Cup 2019 sweepstake"
+                Logo = "https://github.com/aornota/sweepstake-2019/blob/master/src/ui/public/sweepstake-2019-24x24.png"
+                MaxPlayersPerSquad = 31u
+                Status = Archived
+            }
+        }
+
+        let euro2020 = {
+            SweepstakeCommon = {
+                SweepstakeType = Euro
+                Year = 2020u
+                Description = "The world-famous Euro 2020 sweepstake"
+                Logo = "https://github.com/aornota/sweepstake-2021/blob/master/src/ui/public/sweepstake-2021-24x24.png"
+                MaxPlayersPerSquad = 26u
+                Status = Archived
+            }
+        }
+
+        let fifa2022 = {
+            SweepstakeCommon = {
+                SweepstakeType = Fifa
+                Year = 2022u
+                Description = "The world-famous World Cup 2022 sweepstake"
+                Logo = "https://github.com/aornota/sweepstake-2022/blob/main/src/ui/public/sweepstake-2022-24x24.png"
+                MaxPlayersPerSquad = 26u
+                Status = Archived
+            }
+        }
+
+        let rwc2023 = {
+            SweepstakeCommon = {
+                SweepstakeType = Rwc
+                Year = 2023u
+                Description = "The world-famous Rugby World Cup 2023 sweepstake"
+                Logo = "https://github.com/aornota/sweepstake-2023/blob/main/src/ui/public/sweepstake-2023-24x24.png"
+                MaxPlayersPerSquad = 33u
+                Status = Archived
+            }
+        }
+
+        let euro2024 = {
+            SweepstakeCommon = {
+                SweepstakeType = Euro
+                Year = 2024u
+                Description = "The world-famous Euro 2024 sweepstake"
+                Logo = "https://github.com/aornota/sweepstake-2024/blob/main/src/ui/public/sweepstake-2024-24x24.png"
+                MaxPlayersPerSquad = 26u
+                Status = Archived
+            }
+        }
 
         let helperFifa2018 =
             PartitionHelper<
@@ -399,7 +504,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 MatchEventFootball'
              >(
                 root,
-                "2018-fifa",
+                fifa2018.SweepstakeCommon.PartitionName,
                 Partition.fifa2018,
                 mapFixtureFifa,
                 mapSquadFifa,
@@ -418,7 +523,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 MatchEventRugby'
              >(
                 root,
-                "2019-rwc",
+                rwc2019.SweepstakeCommon.PartitionName,
                 Partition.rwc2019,
                 mapFixtureRwc,
                 mapSquadRwc,
@@ -437,7 +542,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 MatchEventFootball'
              >(
                 root,
-                "2020-euro",
+                euro2020.SweepstakeCommon.PartitionName,
                 Partition.euro2020,
                 mapFixtureEuro,
                 mapSquadEuro,
@@ -456,7 +561,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 MatchEventFootball'
              >(
                 root,
-                "2022-fifa",
+                fifa2022.SweepstakeCommon.PartitionName,
                 Partition.fifa2022,
                 mapFixtureFifaV2,
                 mapSquadFifa,
@@ -475,7 +580,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 MatchEventRugby'
              >(
                 root,
-                "2023-rwc",
+                rwc2023.SweepstakeCommon.PartitionName,
                 Partition.rwc2023,
                 mapFixtureRwc,
                 mapSquadRwc,
@@ -494,7 +599,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 MatchEventFootball'
              >(
                 root,
-                "2024-euro",
+                euro2024.SweepstakeCommon.PartitionName,
                 Partition.euro2024,
                 mapFixtureEuro,
                 mapSquadEuro,
@@ -502,12 +607,16 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 logger
             )
 
+        logger.Debug "...checking partitions..."
+
         let! _ = helperFifa2018.CheckAll()
         let! _ = helperRwc2019.CheckAll()
         let! _ = helperEuro2020.CheckAll()
         let! _ = helperFifa2022.CheckAll()
         let! _ = helperRwc2023.CheckAll()
         let! _ = helperEuro2024.CheckAll()
+
+        logger.Debug("...mapping {User}s...", nameof User)
 
         let! usersFifa2018 = helperFifa2018.ReadUsers()
         let! usersRwc2019 = helperRwc2019.ReadUsers()
@@ -529,6 +638,8 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
 
         let userMapper = UserMapper userLists
 
+        logger.Debug "...migrating partitions..."
+
         let! _ = helperFifa2018.MigrateAsync(userMapper.MapperFor(sourceUserMap usersFifa2018))
         let! _ = helperRwc2019.MigrateAsync(userMapper.MapperFor(sourceUserMap usersRwc2019))
         let! _ = helperEuro2020.MigrateAsync(userMapper.MapperFor(sourceUserMap usersEuro2021))
@@ -536,7 +647,13 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         let! _ = helperRwc2023.MigrateAsync(userMapper.MapperFor(sourceUserMap usersRwc2023))
         let! _ = helperEuro2024.MigrateAsync(userMapper.MapperFor(sourceUserMap usersEuro2024))
 
+        logger.Debug("...writing {User}s...", nameof User)
         let! _ = writeUsersAsync (userMapper.Users())
+
+        logger.Debug("...writing {Sweepstake}s...", nameof Sweepstake)
+        let! _ = writeSweepstakesAsync [ fifa2018; rwc2019; euro2020; fifa2022; rwc2023; euro2024 ]
+
+        logger.Debug "...completed migration"
 
         return ()
     }

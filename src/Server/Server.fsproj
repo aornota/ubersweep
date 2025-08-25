@@ -25,6 +25,7 @@
     <Compile Include="Entities\Fixture.fs" />
     <Compile Include="Entities\Post.fs" />
     <Compile Include="Entities\Squad.fs" />
+    <Compile Include="Entities\Sweepstake.fs" />
     <Compile Include="Entities\User.fs" />
     <Compile Include="Entities\UserDraft.fs" />
     <Compile Include="TEMP-Storage.fs" />

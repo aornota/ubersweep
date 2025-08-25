@@ -13,11 +13,12 @@
     <Compile Include="Common\Rvn.fs" />
     <Compile Include="Common\TypeNameSanitizer.fs" />
     <Compile Include="Entities\Common.fs" />
-    <Compile Include="Entities\User.fs" />
     <Compile Include="Entities\Squad.fs" />
     <Compile Include="Entities\Fixture.fs" />
-    <Compile Include="Entities\Post.fs" />
+    <Compile Include="Entities\User.fs" />
     <Compile Include="Entities\Draft.fs" />
+    <Compile Include="Entities\Post.fs" />
+    <Compile Include="Entities\Sweepstake.fs" />
     <Compile Include="Entities\UserDraft.fs" />
     <Compile Include="TEMP-Shared.fs" />
     <Content Include="paket.references" />
