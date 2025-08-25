@@ -99,7 +99,7 @@ type Startup(config) =
     do logger.Information "Starting..."
 
     let persistenceFactory =
-        FilePersistenceFactory(config, PersistenceClock(), logger) :> IPersistenceFactory
+        new FilePersistenceFactory(config, PersistenceClock(), logger) :> IPersistenceFactory
 
     (* TEMP... *)
     do

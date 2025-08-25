@@ -79,24 +79,28 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
             description
         )
 
-    let dic =
-        ConcurrentDictionary<PartitionName option * EntityName, IReader * IWriter>()
+    let fileReaderAndWriterDic =
+        ConcurrentDictionary<PartitionName option * EntityName, FileReaderAndWriterLegacy>()
 
     let getOrAdd (partitionName, type': Type) =
         let entityName = sanitize type'
 
-        dic.GetOrAdd(
+        fileReaderAndWriterDic.GetOrAdd(
             (partitionName, entityName),
-            (fun _ ->
-                let readerAndWriter =
-                    new FileReaderAndWriterLegacy(root, partitionName, entityName, snapshotFrequency, clock, logger)
-
-                readerAndWriter :> IReader, readerAndWriter :> IWriter)
+            (fun _ -> new FileReaderAndWriterLegacy(root, partitionName, entityName, snapshotFrequency, clock, logger))
         )
 
     interface IPersistenceFactory with
         member _.GetReader<'state, 'event when 'state :> IState<'state, 'event>> partitionName =
-            fst (getOrAdd (partitionName, typeof<'state>))
+            getOrAdd (partitionName, typeof<'state>) :> IReader
 
         member _.GetWriter<'state, 'event when 'state :> IState<'state, 'event>> partitionName =
-            snd (getOrAdd (partitionName, typeof<'state>))
+            getOrAdd (partitionName, typeof<'state>) :> IWriter
+
+    interface IDisposable with
+        member _.Dispose() =
+            fileReaderAndWriterDic.Values
+            |> Seq.iter (fun fileReaderAndWriter -> (fileReaderAndWriter :> IDisposable).Dispose())
+
+            fileReaderAndWriterDic.Clear()
+            logger.Warning "Disposed"

@@ -38,5 +38,5 @@ type PersistenceClock() =
 
 type IPersistenceFactory =
     abstract GetReader<'state, 'event when 'state :> IState<'state, 'event>> : PartitionName option -> IReader
-
+    // TODO-PERSISTENCE: Add bool parameter for "allow snapshotting"?...
     abstract GetWriter<'state, 'event when 'state :> IState<'state, 'event>> : PartitionName option -> IWriter

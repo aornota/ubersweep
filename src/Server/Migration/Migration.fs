@@ -493,6 +493,8 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             }
         }
 
+        logger.Debug "...checking partitions..."
+
         let helperFifa2018 =
             PartitionHelper<
                 GroupAToH,
@@ -606,8 +608,6 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 persistenceFactory,
                 logger
             )
-
-        logger.Debug "...checking partitions..."
 
         let! _ = helperFifa2018.CheckAll()
         let! _ = helperRwc2019.CheckAll()
