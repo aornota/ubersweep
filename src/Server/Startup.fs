@@ -32,8 +32,9 @@ module private Startup =
     let private superUserPasswordHash =
         "+eAhZRK85XUDQjEJ4HEwACNgCN607/BbfiWjcRjr4/WIyqGzMVhGlFtO7lhWSB9fwWzi4Nbzf74Kznm25WmSSw=="
 
+    // TODO-STARTUP: Change this to create SuperUser if no SuperUsers exist?...
     let checkUsersAsync (persistenceFactory: IPersistenceFactory, logger: ILogger) = async {
-        logger.Information "...checking Users..."
+        logger.Information("...checking {User}s...", nameof User)
 
         let reader = persistenceFactory.GetReader<User, UserEvent> None
         let! all = reader.ReadAllAsync()
@@ -45,12 +46,18 @@ module private Startup =
                 | Ok(guid, entries) ->
                     match User.helper.FromEntries(guid, entries) with
                     | Ok _ -> ()
-                    | Error error -> logger.Error("...error processing entries for User {guid}: {error}", guid, error)
-                | Error error -> logger.Error("...error reading entries for User: {error}", error))
+                    | Error error ->
+                        logger.Error(
+                            "...error processing entries for {User} {guid}: {error}",
+                            nameof User,
+                            guid,
+                            error
+                        )
+                | Error error -> logger.Error("...error reading entries for {User}: {error}", nameof User, error))
 
-            logger.Information("...{length} User/s checked", all.Length)
+            logger.Information("...{length} {User}/s checked", all.Length, nameof User)
         else
-            logger.Information("...creating {type} because no Users exist...", SuperUser)
+            logger.Information("...creating {type} because no {User}s exist...", SuperUser, nameof User)
 
             let initEvent =
                 UserCreated(superUserName, superUserPasswordSalt, superUserPasswordHash, SuperUser)
@@ -107,7 +114,7 @@ type Startup(config) =
         |> Async.RunSynchronously
         |> ignore
 
-    // TEMP...do Startup.checkUsersAsync (persistenceFactory, logger) |> Async.RunSynchronously
+    do Startup.checkUsersAsync (persistenceFactory, logger) |> Async.RunSynchronously
 
     let todosApi ctx = {
         Shared.getTodos = fun () -> async { return Storage.todos |> List.ofSeq }
