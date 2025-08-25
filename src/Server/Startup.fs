@@ -13,6 +13,7 @@ open Giraffe
 open Giraffe.SerilogExtensions
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Hosting
 open SAFE
 open Serilog
 open System
@@ -87,7 +88,7 @@ module private Startup =
     }
 
 type Startup(config) =
-    do
+    do // configure logging
         Log.Logger <-
             LoggerConfiguration()
                 .ReadFrom.Configuration(config)
@@ -99,10 +100,9 @@ type Startup(config) =
     do logger.Information "Starting..."
 
     let persistenceFactory =
-        new FilePersistenceFactory(config, PersistenceClock(), logger) :> IPersistenceFactory
+        new FilePersistenceFactory(config, PersistenceClock(), logger)
 
-    (* TEMP... *)
-    do
+    do // run migration (if Migrate:MigrateOnStartup setting is true)
         Migration(config, persistenceFactory, logger).MigrateAsync()
         |> Async.RunSynchronously
         |> ignore
@@ -122,7 +122,10 @@ type Startup(config) =
 
     let webApp = Api.make todosApi |> SerilogAdapter.Enable
 
-    member __.Configure(builder: IApplicationBuilder) =
+    member __.Configure(builder: IApplicationBuilder, hostApplicationLifetime: IHostApplicationLifetime) =
+        hostApplicationLifetime.ApplicationStopped.Register(fun _ -> (persistenceFactory :> IDisposable).Dispose())
+        |> ignore
+
         builder.UseFileServer().UseGiraffe webApp
 
     member __.ConfigureServices(services: IServiceCollection) =

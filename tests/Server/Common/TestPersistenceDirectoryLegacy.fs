@@ -33,7 +33,7 @@ type TestPersistenceDirectory<'id, 'state, 'initEvent, 'event
 
     let dir = DirectoryInfo path
 
-    do
+    do // create dir (if appropriate)
         if not (skipCreatingDir || dir.Exists) then
             dir.Create()
 

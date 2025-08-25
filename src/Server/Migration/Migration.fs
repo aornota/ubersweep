@@ -306,7 +306,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         with _ ->
             defaultMigrateOnStartUp, false
 
-    do
+    do // logging
         logger.Information(
             "Using {configuredOrDefault} migrate on startup: {migrateOnStartUp}",
             configuredOrDefault isConfiguredMigrateOnStartUp,
@@ -324,7 +324,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
         with _ ->
             defaultRoot, false
 
-    do
+    do // logging
         if migrateOnStartUp then
             if isConfiguredRoot then
                 logger.Information(

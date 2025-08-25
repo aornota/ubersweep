@@ -45,7 +45,7 @@ type private FileReaderAndWriter
 
     let path = Path.Combine(root, subPath)
 
-    do
+    do // logging
         logger.Information("Using path: {path}", DirectoryInfo(path).FullName)
 
         let description =

@@ -40,7 +40,7 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
 
         $@".\{fst pair}", snd pair
 
-    do
+    do // logging
         logger.Information(
             "Using {configuredOrDefault} persistence root: {root}",
             configuredOrDefault isConfiguredRoot,
@@ -67,7 +67,7 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
         with _ ->
             defaultSnapshotFrequency, false
 
-    do
+    do // logging
         let description =
             match snapshotFrequency with
             | Some snapshotFrequency -> $"every {int snapshotFrequency} revisions"
