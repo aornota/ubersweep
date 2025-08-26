@@ -106,12 +106,12 @@ type Startup(config) =
     let persistenceFactory =
         new FilePersistenceFactory(config, PersistenceClock(), logger)
 
-    do // run migration (if Migrate:MigrateOnStartup setting is true)
+    do // run migration (subject to configuration)
         Migration(config, persistenceFactory, logger).MigrateAsync()
         |> Async.RunSynchronously
         |> ignore<Result<unit, string list>>
 
-    // TODO-STARTUP...do Startup.checkUsersAsync (persistenceFactory, System (nameof Startup), logger) |> Async.RunSynchronously
+    // TODO-STARTUP...do Startup.checkUsersAsync (persistenceFactory, System(nameof Startup), logger) |> Async.RunSynchronously
 
     let todosApi ctx = {
         Shared.getTodos = fun () -> async { return Storage.todos |> List.ofSeq }

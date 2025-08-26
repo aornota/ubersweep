@@ -267,10 +267,10 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
 type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, logger) =
     [<Literal>]
-    let migrateOnStartUpKey = "Migration:MigrateOnStartUp"
+    let migrateOnStartUpKey = "MigrateOnStartUp"
 
     [<Literal>]
-    let rootKey = "Migration:Root"
+    let rootKey = "Root"
 
     [<Literal>]
     let defaultMigrateOnStartUp = false
@@ -286,7 +286,8 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
 
     let migrateOnStartUp, isConfiguredMigrateOnStartUp =
         try
-            let migrateOnStartUp = config[migrateOnStartUpKey]
+            let key = $"{nameof Migration}:{migrateOnStartUpKey}"
+            let migrateOnStartUp = config[key]
 
             if String.IsNullOrWhiteSpace migrateOnStartUp then
                 defaultMigrateOnStartUp, false
@@ -295,9 +296,9 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 | true, migrateOnStartUp -> migrateOnStartUp, true
                 | _ ->
                     logger.Warning(
-                        "Value {migrateOnStartUp} for {migrateOnStartUpKey} configuration setting is invalid (must be an boolean)",
+                        "Value {migrateOnStartUp} for {key} configuration setting is invalid (must be an boolean)",
                         migrateOnStartUp,
-                        migrateOnStartUpKey
+                        key
                     )
 
                     defaultMigrateOnStartUp, false
@@ -313,7 +314,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
 
     let root, isConfiguredRoot =
         try
-            let root = config[rootKey]
+            let root = config[$"{nameof Migration}:{rootKey}"]
 
             if String.IsNullOrWhiteSpace root then
                 defaultRoot, false

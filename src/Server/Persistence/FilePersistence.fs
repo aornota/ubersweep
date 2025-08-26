@@ -40,7 +40,7 @@ module FilePersistence =
 
     let getSnapshotFileName (Rvn rvn) = $"{rvn}.{snapshotFileExtension}"
 
-    let getDirStatus (dir: DirectoryInfo, guid: Guid) : Result<DirStatus, string> = result {
+    let getDirStatus (dir: DirectoryInfo, guid: Guid) = result {
         let parseEventsFileName (fileName: string) =
             let fileNameWithoutExtension = Path.GetFileNameWithoutExtension fileName
 
@@ -136,16 +136,16 @@ module FilePersistence =
                         $"First {nameof Rvn} ({eventsFile.FromRvn}) is not {Rvn.InitialRvn} for only events file in {pathForError}: {eventsFileNames}"
                 | _, [] ->
                     Error $"There are multiple events files and no snapshot files in {pathForError}: {eventsFileNames}"
-                | [], [ snapshotFile ] -> Ok(SnapshotOnly snapshotFile) // does not have to be Rvn.InitialRvn
+                | [], [ snapshotFile ] -> Ok(SnapshotOnly snapshotFile) // note: only snapshot file does not have to be Rvn.InitialRvn
                 | [], _ ->
                     Error
                         $"There are multiple snapshot files and no events files in {pathForError}: {snapshotFileNames}"
                 | _ ->
-                    (* TODO-PERSISTENCE: Check consistency of events and snapshot files:
+                    (* TODO-PERSISTENCE: Check consistency of events and snapshot files - but only if strictMode?...
                         -- First events file must be from Rvn.InitialRvn (unless follows snapshot file)...
                         -- Events and snapshot files must be contiguous... *)
 
-                    let lastSnapshotFile = (snapshotFiles |> List.rev).Head // safe to use Head as empty list will have been matched above
+                    let lastSnapshotFile = (snapshotFiles |> List.rev).Head // safe to use Head as empty list will always have been matched above
 
                     match
                         eventsFiles
@@ -174,6 +174,7 @@ type private FileReaderAndWriter
         partitionName: PartitionName option,
         entityName: EntityName,
         snapshotFrequency: uint option,
+        stringMode: bool,
         clock: IPersistenceClock,
         logger: ILogger
     ) =
@@ -198,11 +199,17 @@ type private FileReaderAndWriter
 
     let pathForError = $@"...\{DirectoryInfo(root).Name}\{subPath}"
 
-    let tryRead (guid: Guid) : Async<Result<NonEmptyList<Entry'>, string>> = asyncResult { // TODO...
+    let tryRead (guid: Guid) : Async<Result<NonEmptyList<Entry'>, string>> = asyncResult {
+        (* TODO...
+        *)
+
         return! Error "TEMP"
     }
 
-    let tryReadAllAsync () : Async<Result<(Guid * NonEmptyList<Entry>) list, string list>> = asyncResult { // TODO...
+    let tryReadAllAsync () : Async<Result<(Guid * NonEmptyList<Entry>) list, string list>> = asyncResult {
+        (* TODO...
+        *)
+
         return! Ok []
     }
 
@@ -252,14 +259,14 @@ type private FileReaderAndWriter
                 | EventsOnly eventsFile
                 | SnapshotAndEvents(_, eventsFile) ->
                     if rvn = eventsFile.ToRvn.NextRvn then
-                        // TODO-PERSISTENCE: Read eventsFile and check that last line is actually ToRvn? Only for "strict mode"?...
+                        // TODO-PERSISTENCE: If strictMode, read eventsFile and check that last line is actually ToRvn?...
                         Ok(Some eventsFile)
                     else
                         Error
                             $"{rvn} is inconsistent with latest {nameof Rvn} ({eventsFile.ToRvn}) for events file {eventsFile.EventsFileName} when writing event for {guid} in {pathForError}"
                 | SnapshotOnly snapshotFile ->
                     if rvn = snapshotFile.Rvn.NextRvn then
-                        // TODO-PERSISTENCE: Read snapshotFile and check that only line is actually Rvn? Only for "strict mode"?...
+                        // TODO-PERSISTENCE: If strictMode, read snapshotFile and check that only line is actually Rvn?...
                         Ok None
                     else
                         Error
@@ -375,15 +382,20 @@ type private FileReaderAndWriter
 
 type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, logger) =
     [<Literal>]
-    let relativeRootKey = "FilePersistence:RelativeRoot"
+    let relativeRootKey = "RelativeRoot"
 
     [<Literal>]
-    let snapshotFrequencyKey = "FilePersistence:SnapshotFrequency"
+    let snapshotFrequencyKey = "SnapshotFrequency"
+
+    [<Literal>]
+    let strictModeKey = "StrictMode"
 
     [<Literal>]
     let defaultRelativeRoot = "persisted"
 
     let defaultSnapshotFrequency: uint option = None
+
+    let defaultStrictMode = false
 
     let configuredOrDefault isConfigured =
         if isConfigured then "configured" else "default"
@@ -395,7 +407,7 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
     let root, isConfiguredRoot =
         let pair =
             try
-                let root = config[relativeRootKey]
+                let root = config[$"{nameof FilePersistenceFactory}:{relativeRootKey}"]
 
                 if String.IsNullOrWhiteSpace root then
                     defaultRelativeRoot, false
@@ -415,7 +427,8 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
 
     let snapshotFrequency, isConfiguredSnapshotFrequency =
         try
-            let snapshotFrequency = config[snapshotFrequencyKey]
+            let key = $"{nameof FilePersistenceFactory}:{snapshotFrequencyKey}"
+            let snapshotFrequency = config[key]
 
             if String.IsNullOrWhiteSpace snapshotFrequency then
                 defaultSnapshotFrequency, false
@@ -424,9 +437,9 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
                 | true, snapshotFrequency when snapshotFrequency > 1u -> Some snapshotFrequency, true
                 | _ ->
                     logger.Warning(
-                        "Value {snapshotFrequency} for {snapshotFrequencyKey} configuration setting is invalid (must be an integer greater than 1)",
+                        "Value {snapshotFrequency} for {key} configuration setting is invalid (must be an integer greater than 1)",
                         snapshotFrequency,
-                        snapshotFrequencyKey
+                        key
                     )
 
                     defaultSnapshotFrequency, false
@@ -445,6 +458,33 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
             description
         )
 
+    let strictMode, isConfiguredStrictMode =
+        try
+            let strictMode = config[$"{nameof FilePersistenceFactory}:{strictModeKey}"]
+
+            if String.IsNullOrWhiteSpace strictMode then
+                defaultStrictMode, false
+            else
+                match bool.TryParse strictMode with
+                | true, strictMode -> strictMode, true
+                | _ ->
+                    logger.Warning(
+                        "Value {strictMode} for {migrateOnStartUpKey} configuration setting is invalid (must be an boolean)",
+                        strictMode,
+                        strictModeKey
+                    )
+
+                    defaultStrictMode, false
+        with _ ->
+            defaultStrictMode, false
+
+    do // logging
+        logger.Information(
+            "Using {configuredOrDefault} strict mode: {strictMode}",
+            configuredOrDefault isConfiguredStrictMode,
+            strictMode
+        )
+
     let fileReaderAndWriterDic =
         ConcurrentDictionary<PartitionName option * EntityName, FileReaderAndWriter>()
 
@@ -453,7 +493,8 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
 
         fileReaderAndWriterDic.GetOrAdd(
             (partitionName, entityName),
-            (fun _ -> new FileReaderAndWriter(root, partitionName, entityName, snapshotFrequency, clock, logger))
+            (fun _ ->
+                new FileReaderAndWriter(root, partitionName, entityName, snapshotFrequency, strictMode, clock, logger))
         )
 
     interface IPersistenceFactory with
