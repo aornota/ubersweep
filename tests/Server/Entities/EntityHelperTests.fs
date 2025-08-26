@@ -1,4 +1,4 @@
-namespace Aornota.Ubersweep.Tests.Server.Persistence
+namespace Aornota.Ubersweep.Tests.Server.Entities
 
 open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Entities
@@ -22,7 +22,7 @@ module EntityHelperTests =
                     let entries =
                         NonEmptyList<Entry>
                             .Create(
-                                EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized 1 :> IEvent).EventJson),
+                                EventJson(Rvn 1u, fixedUtcNow, sourceUser1, (Initialized 1 :> IEvent).EventJson),
                                 []
                             )
 
@@ -49,10 +49,10 @@ module EntityHelperTests =
                     let entries =
                         NonEmptyList<Entry>
                             .Create(
-                                EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                EventJson(Rvn 1u, fixedUtcNow, sourceUser1, (Initialized -1 :> IEvent).EventJson),
                                 [
-                                    EventJson(Rvn 2u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
-                                    EventJson(Rvn 3u, fixedUtcNow, auditUser2Id, (Incremented :> IEvent).EventJson)
+                                    EventJson(Rvn 2u, fixedUtcNow, sourceUser1, (Incremented :> IEvent).EventJson)
+                                    EventJson(Rvn 3u, fixedUtcNow, sourceUser2, (Incremented :> IEvent).EventJson)
                                 ]
                             )
 
@@ -81,7 +81,7 @@ module EntityHelperTests =
                             .Create(
                                 SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                 [
-                                    EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
+                                    EventJson(Rvn 4u, fixedUtcNow, sourceUser1, (Incremented :> IEvent).EventJson)
                                 ]
                             )
 
@@ -112,10 +112,10 @@ module EntityHelperTests =
                     let entries =
                         NonEmptyList<Entry>
                             .Create(
-                                EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                EventJson(Rvn 1u, fixedUtcNow, sourceUser1, (Initialized -1 :> IEvent).EventJson),
                                 [
-                                    EventJson(Rvn 2u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
-                                    EventJson(Rvn 3u, fixedUtcNow, auditUser2Id, (Incremented :> IEvent).EventJson)
+                                    EventJson(Rvn 2u, fixedUtcNow, sourceUser1, (Incremented :> IEvent).EventJson)
+                                    EventJson(Rvn 3u, fixedUtcNow, sourceUser2, (Incremented :> IEvent).EventJson)
                                     SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson)
                                 ]
                             )

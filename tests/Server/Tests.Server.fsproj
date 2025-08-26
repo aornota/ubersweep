@@ -16,8 +16,8 @@
     <Compile Include="Common\FixedClock.fs" />
     <Compile Include="Common\Common.fs" />
     <Compile Include="Common\TestPersistenceDirectoryLegacy.fs" />
-    <Compile Include="Persistence\EntityHelperTests.fs" />
     <Compile Include="Persistence\FileReaderAndWriterLegacyTests.fs" />
+    <Compile Include="Entities\EntityHelperTests.fs" />
     <Compile Include="Entities\UserTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>

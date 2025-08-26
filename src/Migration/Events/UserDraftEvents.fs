@@ -41,7 +41,7 @@ type UserDraftHelper'() =
         | Some(userDraft, rvn), Undrafted(_, userDraftPick) :: t ->
             if userDraft.UserDraftPicks.ContainsKey userDraftPick then
                 let userDraftPicks = Dictionary<UserDraftPick', int>()
-                userDraft.UserDraftPicks.Remove userDraftPick |> ignore
+                userDraft.UserDraftPicks.Remove userDraftPick |> ignore<bool>
 
                 userDraft.UserDraftPicks
                 |> List.ofSeq

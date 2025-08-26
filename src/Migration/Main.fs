@@ -3,7 +3,7 @@ namespace Aornota.Ubersweep.Migration
 open Serilog
 open System.IO
 
-(* TODO-MIGRATION: Remove this - and:
+(* TODO-MIGRATION: Remove this at some point - and:
     -- remove OutputType and AutoGenerateBindingRedirects properties from Migration.fsproj...
     -- remove WatchMigration target from Buiid.fs... *)
 

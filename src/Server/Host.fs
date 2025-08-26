@@ -24,11 +24,11 @@ module Host =
             .ConfigureWebHostDefaults(fun builder ->
                 builder
                     .UseConfiguration(configuration)
-                    .ConfigureLogging(fun builder -> builder.ClearProviders().AddSerilog() |> ignore)
-                    //.ConfigureLogging(fun builder -> builder.AddSerilog() |> ignore)
+                    .ConfigureLogging(fun builder -> builder.ClearProviders().AddSerilog() |> ignore<ILoggingBuilder>)
+                    //.ConfigureLogging(fun builder -> builder.AddSerilog() |> ignore<ILoggingBuilder>)
                     .UseStartup<Startup>()
                     .UseWebRoot("public")
-                |> ignore)
+                |> ignore<IWebHostBuilder>)
             .Build()
             .Run()
 

@@ -32,9 +32,7 @@ type private UserMapper(userLists: (Guid * User' * Rvn) list list) =
 
     member _.MapperFor(sourceUserMap: Map<UserId', string>) : MapUserId =
         fun userId ->
-            if userId = UserId'.UserId(Guid AgentUser.agentUserGuid) then
-                UserId.FromGuid(Guid AgentUser.agentUserGuid)
-            else if sourceUserMap |> Map.containsKey userId then
+            if sourceUserMap |> Map.containsKey userId then
                 let userName = sourceUserMap[userId]
 
                 if userMap |> Map.containsKey userName then

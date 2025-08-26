@@ -1,5 +1,7 @@
 namespace Aornota.Ubersweep.Server.Persistence
 
+// TODO-PERSISTENCE: Remove this (and related tests) once new FileReaderAndWriter has been implemeneted (with tests)...
+
 open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Common
@@ -10,9 +12,9 @@ open Serilog
 open System
 open System.IO
 
-type private Input =
-    | Read of guid: Guid * reply: AsyncReplyChannel<Result<NonEmptyList<Entry>, string>>
-    | ReadAll of reply: AsyncReplyChannel<Result<Guid * NonEmptyList<Entry>, string> list>
+type private Input' =
+    | Read of guid: Guid * reply: AsyncReplyChannel<Result<NonEmptyList<Entry'>, string>>
+    | ReadAll of reply: AsyncReplyChannel<Result<Guid * NonEmptyList<Entry'>, string> list>
     | CreateFromSnapshot of guid: Guid * rvn: Rvn * snapshotJson: Json * reply: AsyncReplyChannel<Result<unit, string>>
     | WriteEvent of
         guid: Guid *
@@ -60,21 +62,21 @@ type FileReaderAndWriterLegacy
             match entries with
             | h :: t ->
                 match h with
-                | EventJson(rvn, _, _, _) ->
+                | EventJson'(rvn, _, _, _) ->
                     if rvn.IsValidNextRvn lastRvn then
                         checkConsistency t (Some rvn) (Some false)
                     else
-                        Error $"{nameof EventJson} with {rvn} inconsistent with previous {nameof Entry} ({lastRvn})"
-                | SnapshotJson(rvn, _) ->
+                        Error $"{nameof EventJson'} with {rvn} inconsistent with previous {nameof Entry'} ({lastRvn})"
+                | SnapshotJson'(rvn, _) ->
                     match lastWasSnapshot, lastRvn with
                     | Some true, _ ->
                         Error
-                            $"{nameof SnapshotJson} with {rvn} but previous {nameof Entry} was also {nameof SnapshotJson}"
+                            $"{nameof SnapshotJson'} with {rvn} but previous {nameof Entry'} was also {nameof SnapshotJson'}"
                     | _, Some lastRvn ->
                         if rvn = lastRvn then
                             checkConsistency t (Some rvn) (Some true)
                         else
-                            Error $"{nameof SnapshotJson} with {rvn} not equal to previous {nameof Entry} ({lastRvn})"
+                            Error $"{nameof SnapshotJson'} with {rvn} not equal to previous {nameof Entry'} ({lastRvn})"
                     | _, None ->
                         // If the first entry is a snapshot, it does not need to be InitialRvn.
                         checkConsistency t (Some rvn) (Some true)
@@ -84,8 +86,8 @@ type FileReaderAndWriterLegacy
             match entries with
             | h :: t ->
                 match h with
-                | EventJson _ -> fromLastSnapshot t (h :: acc)
-                | SnapshotJson _ -> h :: acc
+                | EventJson' _ -> fromLastSnapshot t (h :: acc)
+                | SnapshotJson' _ -> h :: acc
             | [] -> acc
 
         try
@@ -100,7 +102,7 @@ type FileReaderAndWriterLegacy
                 | [] -> return! Error $"File exists but is empty when reading {guid} for {pathForError}"
                 | lines ->
                     let deserializationResults =
-                        lines |> List.map (fun line -> Json.fromJson<Entry> (Json line))
+                        lines |> List.map (fun line -> Json.fromJson<Entry'> (Json line))
 
                     match
                         deserializationResults
@@ -125,7 +127,7 @@ type FileReaderAndWriterLegacy
                         | Ok() ->
                             // If there are any snapshots, only return the last snapshot and subsequent entries (if any)
                             let entries = fromLastSnapshot (entries |> List.rev) []
-                            return! NonEmptyList<Entry>.FromList entries
+                            return! NonEmptyList<Entry'>.FromList entries
                         | Error error ->
                             return! Error $"Consistency check failed when reading {guid} for {pathForError}: {error}"
         with exn ->
@@ -161,7 +163,7 @@ type FileReaderAndWriterLegacy
                         |> Async.Parallel
             else
                 try
-                    Directory.CreateDirectory path |> ignore
+                    Directory.CreateDirectory path |> ignore<DirectoryInfo>
                     return [||]
                 with exn ->
                     return [| Error $"Error creating {pathForError} when reading all: {exn.Message}" |]
@@ -179,7 +181,7 @@ type FileReaderAndWriterLegacy
             | true ->
                 return! Error $"File already exists when creating from snapshot for {rvn} for {guid} in {pathForError}"
             | false ->
-                let (Json snapshotJson') = Json.toJson (SnapshotJson(rvn, snapshotJson))
+                let (Json snapshotJson') = Json.toJson (SnapshotJson'(rvn, snapshotJson))
                 do! File.WriteAllLinesAsync(file.FullName, [| snapshotJson' |])
 
                 return! Ok()
@@ -202,7 +204,7 @@ type FileReaderAndWriterLegacy
                     Error $"File does not exist when writing event for non-initial {rvn} for {guid} in {pathForError}"
             | true, false ->
                 let (Json eventJson) =
-                    Json.toJson (EventJson(rvn, utcNow, auditUserId, event.EventJson))
+                    Json.toJson (EventJson'(rvn, utcNow, auditUserId, event.EventJson))
 
                 do! File.WriteAllLinesAsync(file.FullName, [| eventJson |])
                 return! Ok()
@@ -212,11 +214,11 @@ type FileReaderAndWriterLegacy
 
                 match lines |> List.ofArray |> List.rev with
                 | lastLine :: _ ->
-                    match Json.fromJson<Entry> (Json lastLine) with
+                    match Json.fromJson<Entry'> (Json lastLine) with
                     | Ok entry ->
                         if rvn.IsValidNextRvn(Some entry.Rvn) then
                             let (Json eventJson) =
-                                Json.toJson (EventJson(rvn, utcNow, auditUserId, event.EventJson))
+                                Json.toJson (EventJson'(rvn, utcNow, auditUserId, event.EventJson))
 
                             let (Rvn rvn') = rvn
 
@@ -226,7 +228,7 @@ type FileReaderAndWriterLegacy
                                 | Some getSnapshot, Some snapshotFrequency when
                                     snapshotFrequency > 1u && rvn' % snapshotFrequency = 0u
                                     ->
-                                    let (Json snapshotJson) = Json.toJson (SnapshotJson(rvn, getSnapshot ()))
+                                    let (Json snapshotJson) = Json.toJson (SnapshotJson'(rvn, getSnapshot ()))
                                     [| eventJson; snapshotJson |]
                                 | _ -> [| eventJson |]
 
@@ -235,7 +237,7 @@ type FileReaderAndWriterLegacy
                         else
                             return!
                                 Error
-                                    $"Previous {nameof Entry} ({entry.Rvn}) not consistent when writing event for {rvn} for {guid} in {pathForError}"
+                                    $"Previous {nameof Entry'} ({entry.Rvn}) not consistent when writing event for {rvn} for {guid} in {pathForError}"
                     | Error error ->
                         return!
                             Error
@@ -317,18 +319,18 @@ type FileReaderAndWriterLegacy
 
     static member FileExtension = fileExtension
 
-    interface IReader with
-        member _.ReadAsync guid =
+    interface IReader' with
+        member _.ReadAsync' guid =
             agent.PostAndAsyncReply(fun reply -> Read(guid, reply))
 
-        member _.ReadAllAsync() =
+        member _.ReadAllAsync'() =
             agent.PostAndAsyncReply(fun reply -> ReadAll reply)
 
-    interface IWriter with
-        member _.CreateFromSnapshotAsync(guid, rvn, snapshotJson) =
+    interface IWriter' with
+        member _.CreateFromSnapshotAsync'(guid, rvn, snapshotJson) =
             agent.PostAndAsyncReply(fun reply -> CreateFromSnapshot(guid, rvn, snapshotJson, reply))
 
-        member _.WriteEventAsync(guid, rvn, auditUserId, event, getSnapshot) =
+        member _.WriteEventAsync'(guid, rvn, auditUserId, event, getSnapshot) =
             agent.PostAndAsyncReply(fun reply -> WriteEvent(guid, rvn, auditUserId, event, getSnapshot, reply))
 
     interface IDisposable with

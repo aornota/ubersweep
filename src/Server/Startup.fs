@@ -17,6 +17,7 @@ open Microsoft.Extensions.Hosting
 open SAFE
 open Serilog
 open System
+open System.Threading
 
 module private Startup =
     [<Literal>]
@@ -32,49 +33,36 @@ module private Startup =
     let private superUserPasswordHash =
         "+eAhZRK85XUDQjEJ4HEwACNgCN607/BbfiWjcRjr4/WIyqGzMVhGlFtO7lhWSB9fwWzi4Nbzf74Kznm25WmSSw=="
 
-    // TODO-STARTUP: Change this to create SuperUser if no SuperUsers exist?...
-    let checkUsersAsync (persistenceFactory: IPersistenceFactory, logger: ILogger) = async {
+    // TODO-STARTUP: Change this to create SuperUser if no SuperUsers exist? And to populate "UserCache"? And do something similar for Fifa-2026 Sweepstake?...
+    let checkUsersAsync (persistenceFactory: IPersistenceFactory, source: Source, logger: ILogger) = async {
         logger.Information("...checking {User}s...", nameof User)
-
         let reader = persistenceFactory.GetReader<User, UserEvent> None
-        let! all = reader.ReadAllAsync()
+        let! result = reader.ReadAllAsync()
 
-        if all.Length > 0 then
-            all
-            |> List.iter (fun result ->
-                match result with
-                | Ok(guid, entries) ->
-                    match User.helper.FromEntries(guid, entries) with
-                    | Ok _ -> ()
-                    | Error error ->
-                        logger.Error(
-                            "...error processing entries for {User} {guid}: {error}",
-                            nameof User,
-                            guid,
-                            error
-                        )
-                | Error error -> logger.Error("...error reading entries for {User}: {error}", nameof User, error))
-
-            logger.Information("...{length} {User}/s checked", all.Length, nameof User)
-        else
-            logger.Information("...creating {type} because no {User}s exist...", SuperUser, nameof User)
+        match result with
+        | Ok [] ->
+            logger.Information("...creating {SuperUser} because no {User}s exist...", SuperUser, nameof User)
 
             let initEvent =
                 UserCreated(superUserName, superUserPasswordSalt, superUserPasswordHash, SuperUser)
 
             let superUser = User.helper.InitFromEvent(Guid superUserGuid, initEvent)
-
             let writer = persistenceFactory.GetWriter<User, UserEvent> None
 
             let! result =
                 writer.WriteEventAsync(
                     superUser.Guid,
                     Rvn.InitialRvn,
-                    UserId.FromGuid(Guid AgentUser.agentUserGuid),
+                    source,
                     initEvent,
                     Some(fun _ -> superUser.SnapshotJson)
                 )
 
+            match result with
+            | Ok() -> logger.Information("...{SuperUser} created", SuperUser)
+            | Error error -> logger.Error("...error creating {SuperUser}: {error}", SuperUser, error)
+
+        (* TODO-PERSISTENCE: Implement ReadAsync?...
             match result with
             | Ok _ ->
                 match! reader.ReadAsync superUser.Guid with
@@ -90,8 +78,17 @@ module private Startup =
                         )
                 | Error error -> logger.Error("...error reading entries for {type}: {error}", SuperUser, error)
             | Error error -> logger.Error("...error creating {type}: {error}", SuperUser, error)
+            *)
+        | Ok list ->
+            list
+            |> List.iter (fun (guid, entries) ->
+                match User.helper.FromEntries(guid, entries) with
+                | Ok _ -> ()
+                | Error error ->
+                    logger.Error("...error processing {User} entries for {guid}: {error}", nameof User, guid, error))
 
-        ()
+            logger.Information("...{length} {User}/s checked", list.Length, nameof User)
+        | Error errors -> logger.Error("...errors checking {User}s: {errors}", nameof User, errors)
     }
 
 type Startup(config) =
@@ -112,9 +109,9 @@ type Startup(config) =
     do // run migration (if Migrate:MigrateOnStartup setting is true)
         Migration(config, persistenceFactory, logger).MigrateAsync()
         |> Async.RunSynchronously
-        |> ignore
+        |> ignore<Result<unit, string list>>
 
-    do Startup.checkUsersAsync (persistenceFactory, logger) |> Async.RunSynchronously
+    // TODO-STARTUP...do Startup.checkUsersAsync (persistenceFactory, System (nameof Startup), logger) |> Async.RunSynchronously
 
     let todosApi ctx = {
         Shared.getTodos = fun () -> async { return Storage.todos |> List.ofSeq }
@@ -131,10 +128,10 @@ type Startup(config) =
 
     member __.Configure(builder: IApplicationBuilder, hostApplicationLifetime: IHostApplicationLifetime) =
         hostApplicationLifetime.ApplicationStopped.Register(fun _ -> (persistenceFactory :> IDisposable).Dispose())
-        |> ignore
+        |> ignore<CancellationTokenRegistration>
 
         builder.UseFileServer().UseGiraffe webApp
 
     member __.ConfigureServices(services: IServiceCollection) =
         services.AddGiraffe().AddSingleton(persistenceFactory).AddSingleton(Log.Logger)
-        |> ignore
+        |> ignore<IServiceCollection>

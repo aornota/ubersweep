@@ -46,7 +46,9 @@ Target.create "Azure" (fun _ ->
         add_resource web
     }
 
-    deployment |> Deploy.execute "SAFE-App" Deploy.NoParameters |> ignore)
+    deployment
+    |> Deploy.execute "SAFE-App" Deploy.NoParameters
+    |> ignore<Map<string, string>>)
 
 Target.create "Build" (fun _ -> run dotnet [ "build"; "ubersweep.sln" ] ".")
 

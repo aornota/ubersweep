@@ -49,7 +49,7 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -59,9 +59,9 @@ module FileReaderAndWriterTestsLegacy =
                 match result with
                 | Ok nonEmptyList ->
                     let expectedNonEmptyList =
-                        NonEmptyList<Entry>
+                        NonEmptyList<Entry'>
                             .Create(
-                                EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                EventJson'(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
                                 []
                             )
 
@@ -79,9 +79,9 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
-                                $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson'",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -91,12 +91,12 @@ module FileReaderAndWriterTestsLegacy =
                 match result with
                 | Ok nonEmptyList ->
                     let expectedNonEmptyList =
-                        NonEmptyList<Entry>
+                        NonEmptyList<Entry'>
                             .Create(
-                                EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                EventJson'(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
                                 [
-                                    EventJson(Rvn 2u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
-                                    EventJson(Rvn 3u, fixedUtcNow, auditUser2Id, (Incremented :> IEvent).EventJson)
+                                    EventJson'(Rvn 2u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
+                                    EventJson'(Rvn 3u, fixedUtcNow, auditUser2Id, (Incremented :> IEvent).EventJson)
                                 ]
                             )
 
@@ -114,11 +114,11 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
-                                $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
-                                """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
-                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson'",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                """["SnapshotJson'",["Rvn",3],["Json","{\"Count\":1}"]]"""
+                                $"""["EventJson'",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -128,11 +128,11 @@ module FileReaderAndWriterTestsLegacy =
                 match result with
                 | Ok nonEmptyList ->
                     let expectedNonEmptyList =
-                        NonEmptyList<Entry>
+                        NonEmptyList<Entry'>
                             .Create(
-                                SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
+                                SnapshotJson'(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                 [
-                                    EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
+                                    EventJson'(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
                                 ]
                             )
 
@@ -149,7 +149,7 @@ module FileReaderAndWriterTestsLegacy =
                     let! _ =
                         testDir.TryWriteAllLinesAsync(
                             guid,
-                            [ """["SnapshotJson",["Rvn",1],["Json","{\"Count\":1}"]]""" ]
+                            [ """["SnapshotJson'",["Rvn",1],["Json","{\"Count\":1}"]]""" ]
                         )
 
                     return! testDir.ReadAsync guid
@@ -158,9 +158,9 @@ module FileReaderAndWriterTestsLegacy =
                 match result with
                 | Ok nonEmptyList ->
                     let expectedNonEmptyList =
-                        NonEmptyList<Entry>
+                        NonEmptyList<Entry'>
                             .Create(
-                                SnapshotJson(
+                                SnapshotJson'(
                                     Rvn.InitialRvn,
                                     ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson
                                 ),
@@ -181,8 +181,8 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
-                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                """["SnapshotJson'",["Rvn",3],["Json","{\"Count\":1}"]]"""
+                                $"""["EventJson'",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -192,11 +192,11 @@ module FileReaderAndWriterTestsLegacy =
                 match result with
                 | Ok nonEmptyList ->
                     let expectedNonEmptyList =
-                        NonEmptyList<Entry>
+                        NonEmptyList<Entry'>
                             .Create(
-                                SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
+                                SnapshotJson'(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                 [
-                                    EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
+                                    EventJson'(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
                                 ]
                             )
 
@@ -224,7 +224,7 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -236,9 +236,9 @@ module FileReaderAndWriterTestsLegacy =
                     let expectedList = [
                         Ok(
                             guid,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                    EventJson'(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
                                     []
                                 )
                         )
@@ -262,8 +262,8 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid1,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -271,11 +271,11 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid2,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                                $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
-                                $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
-                                """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
-                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                $"""["EventJson'",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                """["SnapshotJson'",["Rvn",3],["Json","{\"Count\":1}"]]"""
+                                $"""["EventJson'",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -287,21 +287,21 @@ module FileReaderAndWriterTestsLegacy =
                     let expectedList = [
                         Ok(
                             guid1,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                    EventJson'(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
                                     [
-                                        EventJson(Rvn 2u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
+                                        EventJson'(Rvn 2u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
                                     ]
                                 )
                         )
                         Ok(
                             guid2,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
+                                    SnapshotJson'(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                     [
-                                        EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
+                                        EventJson'(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
                                     ]
                                 )
                         )
@@ -321,7 +321,7 @@ module FileReaderAndWriterTestsLegacy =
                     let! _ =
                         testDir.TryWriteAllLinesAsync(
                             guid1,
-                            [ """["SnapshotJson",["Rvn",1],["Json","{\"Count\":1}"]]""" ]
+                            [ """["SnapshotJson'",["Rvn",1],["Json","{\"Count\":1}"]]""" ]
                         )
 
 
@@ -329,8 +329,8 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid2,
                             [
-                                """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
-                                $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                                """["SnapshotJson'",["Rvn",3],["Json","{\"Count\":1}"]]"""
+                                $"""["EventJson'",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -342,9 +342,9 @@ module FileReaderAndWriterTestsLegacy =
                     let expectedList = [
                         Ok(
                             guid1,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    SnapshotJson(
+                                    SnapshotJson'(
                                         Rvn.InitialRvn,
                                         ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson
                                     ),
@@ -353,11 +353,11 @@ module FileReaderAndWriterTestsLegacy =
                         )
                         Ok(
                             guid2,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    SnapshotJson(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
+                                    SnapshotJson'(Rvn 3u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                     [
-                                        EventJson(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
+                                        EventJson'(Rvn 4u, fixedUtcNow, auditUser1Id, (Incremented :> IEvent).EventJson)
                                     ]
                                 )
                         )
@@ -380,7 +380,7 @@ module FileReaderAndWriterTestsLegacy =
 
                 match result with
                 | Ok lines ->
-                    let expectedLines = [ """["SnapshotJson",["Rvn",69],["Json","{\"Count\":666}"]]""" ]
+                    let expectedLines = [ """["SnapshotJson'",["Rvn",69],["Json","{\"Count\":666}"]]""" ]
 
                     Expect.equal lines expectedLines $"Unexpected {nameof Ok} {nameof result}"
                 | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
@@ -407,7 +407,7 @@ module FileReaderAndWriterTestsLegacy =
                 match result with
                 | Ok lines ->
                     let expectedLines = [
-                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                        $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                     ]
 
                     Expect.equal lines expectedLines $"Unexpected {nameof Ok} {nameof result}"
@@ -438,9 +438,9 @@ module FileReaderAndWriterTestsLegacy =
                 match result with
                 | Ok lines ->
                     let expectedLines = [
-                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                        $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
-                        $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                        $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                        $"""["EventJson'",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                        $"""["EventJson'",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                     ]
 
                     Expect.equal lines expectedLines $"Unexpected {nameof Ok} {nameof result}"
@@ -484,15 +484,15 @@ module FileReaderAndWriterTestsLegacy =
                 match result with
                 | Ok(lines1, lines2) ->
                     let expectedLines1 = [
-                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                        $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                     ]
 
                     let expectedLines2 = [
-                        $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
-                        $"""["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
-                        $"""["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
-                        """["SnapshotJson",["Rvn",3],["Json","{\"Count\":1}"]]"""
-                        $"""["EventJson",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                        $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                        $"""["EventJson'",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                        $"""["EventJson'",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser2Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
+                        """["SnapshotJson'",["Rvn",3],["Json","{\"Count\":1}"]]"""
+                        $"""["EventJson'",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","\"Incremented\""]]"""
                     ]
 
                     Expect.equal lines1 expectedLines1 $"Unexpected {nameof fst} {nameof Ok} {nameof result}"
@@ -561,7 +561,7 @@ module FileReaderAndWriterTestsLegacy =
                 | Error error ->
                     Expect.equal
                         error
-                        $"At least one line caused a deserialization error when reading {guid} for {testDir.PathForError} (e.g. Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EventJason in Aornota.Ubersweep.Server.Persistence.{nameof Entry})"
+                        $"At least one line caused a deserialization error when reading {guid} for {testDir.PathForError} (e.g. Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EventJason in Aornota.Ubersweep.Server.Persistence.{nameof Entry'})"
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when event revision inconsistent with previous entry revision" {
@@ -575,8 +575,8 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
-                                """["EventJson",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","\"Incremented\""]]"""
+                                """["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson'",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","\"Incremented\""]]"""
                             ]
                         )
 
@@ -588,7 +588,7 @@ module FileReaderAndWriterTestsLegacy =
                 | Error error ->
                     Expect.equal
                         error
-                        $"Consistency check failed when reading {guid} for {testDir.PathForError}: {nameof EventJson} with {Rvn 3u} inconsistent with previous {nameof Entry} ({Some(Rvn 1u)})"
+                        $"Consistency check failed when reading {guid} for {testDir.PathForError}: {nameof EventJson'} with {Rvn 3u} inconsistent with previous {nameof Entry'} ({Some(Rvn 1u)})"
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when snapshot revision not equal to previous event revision" {
@@ -602,8 +602,8 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
-                                """["SnapshotJson",["Rvn",2],["Json","{\"Count\":-1}"]]"""
+                                """["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["SnapshotJson'",["Rvn",2],["Json","{\"Count\":-1}"]]"""
                             ]
                         )
 
@@ -615,7 +615,7 @@ module FileReaderAndWriterTestsLegacy =
                 | Error error ->
                     Expect.equal
                         error
-                        $"Consistency check failed when reading {guid} for {testDir.PathForError}: {nameof SnapshotJson} with {Rvn 2u} not equal to previous {nameof Entry} ({Rvn 1u})"
+                        $"Consistency check failed when reading {guid} for {testDir.PathForError}: {nameof SnapshotJson'} with {Rvn 2u} not equal to previous {nameof Entry'} ({Rvn 1u})"
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read when snapshot but previous entry was snapshot" {
@@ -629,9 +629,9 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
-                                """["SnapshotJson",["Rvn",1],["Json","{\"Count\":-1}"]]"""
-                                """["SnapshotJson",["Rvn",1],["Json","{\"Count\":-1}"]]"""
+                                """["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["SnapshotJson'",["Rvn",1],["Json","{\"Count\":-1}"]]"""
+                                """["SnapshotJson'",["Rvn",1],["Json","{\"Count\":-1}"]]"""
                             ]
                         )
 
@@ -643,7 +643,7 @@ module FileReaderAndWriterTestsLegacy =
                 | Error error ->
                     Expect.equal
                         error
-                        $"Consistency check failed when reading {guid} for {testDir.PathForError}: {nameof SnapshotJson} with {Rvn 1u} but previous {nameof Entry} was also {nameof SnapshotJson}"
+                        $"Consistency check failed when reading {guid} for {testDir.PathForError}: {nameof SnapshotJson'} with {Rvn 1u} but previous {nameof Entry'} was also {nameof SnapshotJson'}"
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Read all when at least one file with non-Guid name exists" {
@@ -701,7 +701,7 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -715,9 +715,9 @@ module FileReaderAndWriterTestsLegacy =
                     let expectedList = [
                         Ok(
                             guidOk,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                    EventJson'(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
                                     []
                                 )
                         )
@@ -741,7 +741,7 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -761,14 +761,14 @@ module FileReaderAndWriterTestsLegacy =
                     let expectedList = [
                         Ok(
                             guidOk,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                    EventJson'(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
                                     []
                                 )
                         )
                         Error
-                            $"At least one line caused a deserialization error when reading {guidError} for {testDir.PathForError} (e.g. Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EventJason in Aornota.Ubersweep.Server.Persistence.{nameof Entry})"
+                            $"At least one line caused a deserialization error when reading {guidError} for {testDir.PathForError} (e.g. Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EventJason in Aornota.Ubersweep.Server.Persistence.{nameof Entry'})"
                     ]
 
                     Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
@@ -788,7 +788,7 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -796,7 +796,7 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guidError,
                             [
-                                """["EventJson",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson'",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -808,14 +808,14 @@ module FileReaderAndWriterTestsLegacy =
                     let expectedList = [
                         Ok(
                             guidOk,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                    EventJson'(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
                                     []
                                 )
                         )
                         Error
-                            $"Consistency check failed when reading {guidError} for {testDir.PathForError}: {nameof EventJson} with {Rvn 2u} inconsistent with previous {nameof Entry} ({None})"
+                            $"Consistency check failed when reading {guidError} for {testDir.PathForError}: {nameof EventJson'} with {Rvn 2u} inconsistent with previous {nameof Entry'} ({None})"
                     ]
 
                     Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
@@ -835,7 +835,7 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -843,8 +843,8 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guidError,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
-                                """["SnapshotJson",["Rvn",2],["Json","{\"Count\":-1}"]]"""
+                                """["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["SnapshotJson'",["Rvn",2],["Json","{\"Count\":-1}"]]"""
                             ]
                         )
 
@@ -856,14 +856,14 @@ module FileReaderAndWriterTestsLegacy =
                     let expectedList = [
                         Ok(
                             guidOk,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                    EventJson'(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
                                     []
                                 )
                         )
                         Error
-                            $"Consistency check failed when reading {guidError} for {testDir.PathForError}: {nameof SnapshotJson} with {Rvn 2u} not equal to previous {nameof Entry} ({Rvn 1u})"
+                            $"Consistency check failed when reading {guidError} for {testDir.PathForError}: {nameof SnapshotJson'} with {Rvn 2u} not equal to previous {nameof Entry'} ({Rvn 1u})"
                     ]
 
                     Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
@@ -883,7 +883,7 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guidOk,
                             [
-                                $"""["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
+                                $"""["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","{(auditUser1Id :> IId).Guid}"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -891,9 +891,9 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guidError,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
-                                """["SnapshotJson",["Rvn",1],["Json","{\"Count\":-1}"]]"""
-                                """["SnapshotJson",["Rvn",1],["Json","{\"Count\":-1}"]]"""
+                                """["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["SnapshotJson'",["Rvn",1],["Json","{\"Count\":-1}"]]"""
+                                """["SnapshotJson'",["Rvn",1],["Json","{\"Count\":-1}"]]"""
                             ]
                         )
 
@@ -905,14 +905,14 @@ module FileReaderAndWriterTestsLegacy =
                     let expectedList = [
                         Ok(
                             guidOk,
-                            NonEmptyList<Entry>
+                            NonEmptyList<Entry'>
                                 .Create(
-                                    EventJson(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
+                                    EventJson'(Rvn 1u, fixedUtcNow, auditUser1Id, (Initialized -1 :> IEvent).EventJson),
                                     []
                                 )
                         )
                         Error
-                            $"Consistency check failed when reading {guidError} for {testDir.PathForError}: {nameof SnapshotJson} with {Rvn 1u} but previous {nameof Entry} was also {nameof SnapshotJson}"
+                            $"Consistency check failed when reading {guidError} for {testDir.PathForError}: {nameof SnapshotJson'} with {Rvn 1u} but previous {nameof Entry'} was also {nameof SnapshotJson'}"
                     ]
 
                     Expect.equal list expectedList $"Unexpected {nameof Ok} {nameof result}"
@@ -1014,7 +1014,7 @@ module FileReaderAndWriterTestsLegacy =
                         testDir.TryWriteAllLinesAsync(
                             guid,
                             [
-                                """["EventJson",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
+                                """["EventJson'",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]"""
                             ]
                         )
 
@@ -1026,7 +1026,7 @@ module FileReaderAndWriterTestsLegacy =
                 | Error error ->
                     Expect.equal
                         error
-                        $"Previous {nameof Entry} ({Rvn 1u}) not consistent when writing event for {Rvn 3u} for {guid} in {testDir.PathForError}"
+                        $"Previous {nameof Entry'} ({Rvn 1u}) not consistent when writing event for {Rvn 3u} for {guid} in {testDir.PathForError}"
                         $"{nameof Error} is not the expected error"
             }
             testAsync "Write event when deserialization error for last entry" {
@@ -1041,7 +1041,7 @@ module FileReaderAndWriterTestsLegacy =
                             guid,
                             [
                                 """["EventJason",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","[\"Initialized\",-1]"]]""" // 'EventJason' irrelevant as only the last entry will be deserialized
-                                """["EventJson",["Revision",2],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","\"Incremented\""]]""" // 'Revision' should cause a deserialization error
+                                """["EventJson'",["Revision",2],"2025-08-07T15:11:33.0000000Z",["UserId","48edec54-5b2e-4ec9-afae-b554120ae856"],["Json","\"Incremented\""]]""" // 'Revision' should cause a deserialization error
                             ]
                         )
 
@@ -1059,6 +1059,16 @@ module FileReaderAndWriterTestsLegacy =
         ]
 
     let private integration =
+        let mapEntries (entries: NonEmptyList<Entry'>) =
+            let mapEntry =
+                function
+                | EventJson'(rvn, timestampUtc, auditUserId, json) ->
+                    EventJson(rvn, timestampUtc, User auditUserId, json)
+                | SnapshotJson'(rvn, json) -> SnapshotJson(rvn, json)
+
+            NonEmptyList<Entry>
+                .Create(mapEntry entries.Head, entries.Tail |> List.map mapEntry)
+
         testList "integration" [
             testAsync "Write multiple events (without snapshots) and read (separately) with no partition" {
                 use testDir =
@@ -1084,7 +1094,7 @@ module FileReaderAndWriterTestsLegacy =
                         )
 
                     let! entries1 = testDir.ReadAsync guid1
-                    let! actual1 = Counter.helper.FromEntries(guid1, entries1)
+                    let! actual1 = Counter.helper.FromEntries(guid1, mapEntries entries1)
 
                     let! expected2 =
                         initializeAndApply (
@@ -1103,7 +1113,7 @@ module FileReaderAndWriterTestsLegacy =
                         )
 
                     let! entries2 = testDir.ReadAsync guid2
-                    let! actual2 = Counter.helper.FromEntries(guid2, entries2)
+                    let! actual2 = Counter.helper.FromEntries(guid2, mapEntries entries2)
 
                     return actual1, expected1, actual2, expected2
                 }
@@ -1177,11 +1187,11 @@ module FileReaderAndWriterTestsLegacy =
                         | [] -> Error "Reading all returned no results"
                         | _ -> Error $"Reading all returned an unexpected number ({all.Length}) of results"
 
-                    let! guidAndEntries1 = result1
-                    let! actual1 = Counter.helper.FromEntries guidAndEntries1
+                    let! guid1, entries1 = result1
+                    let! actual1 = Counter.helper.FromEntries(guid1, mapEntries entries1)
 
-                    let! guidAndEntries2 = result2
-                    let! actual2 = Counter.helper.FromEntries guidAndEntries2
+                    let! guid2, entries2 = result2
+                    let! actual2 = Counter.helper.FromEntries(guid2, mapEntries entries2)
 
                     return actual1, expected1, actual2, expected2
                 }

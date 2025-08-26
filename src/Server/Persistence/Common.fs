@@ -6,8 +6,12 @@ open Aornota.Ubersweep.Shared.Entities
 
 open System
 
+type Source =
+    | User of userId: UserId
+    | System of sanitizedTypeName: string
+
 type Entry =
-    | EventJson of rvn: Rvn * timestampUtc: DateTime * auditUserId: UserId * json: Json
+    | EventJson of rvn: Rvn * timestampUtc: DateTime * source: Source * json: Json
     | SnapshotJson of rvn: Rvn * json: Json
 
     member this.Rvn =
@@ -21,13 +25,12 @@ type PartitionName = string
 type EntityName = string
 
 type IReader =
-    abstract ReadAsync: Guid -> Async<Result<NonEmptyList<Entry>, string>>
-    abstract ReadAllAsync: unit -> Async<Result<Guid * NonEmptyList<Entry>, string> list>
+    abstract ReadAllAsync: unit -> Async<Result<(Guid * NonEmptyList<Entry>) list, string list>>
 
 type IWriter =
-    // TODO-PERSISTENCE: ArchiveAllAsync? WriteEventsAsync?...
+    // TODO-PERSISTENCE: ArchiveAllAsync?...
     abstract CreateFromSnapshotAsync: Guid * Rvn * Json -> Async<Result<unit, string>>
-    abstract WriteEventAsync: Guid * Rvn * UserId * IEvent * GetSnapshot option -> Async<Result<unit, string>>
+    abstract WriteEventAsync: Guid * Rvn * Source * IEvent * GetSnapshot option -> Async<Result<unit, string>>
 
 type IPersistenceClock =
     abstract GetUtcNow: unit -> DateTime
@@ -38,5 +41,4 @@ type PersistenceClock() =
 
 type IPersistenceFactory =
     abstract GetReader<'state, 'event when 'state :> IState<'state, 'event>> : PartitionName option -> IReader
-    // TODO-PERSISTENCE: Add bool parameter for "allow snapshotting"?...
     abstract GetWriter<'state, 'event when 'state :> IState<'state, 'event>> : PartitionName option -> IWriter

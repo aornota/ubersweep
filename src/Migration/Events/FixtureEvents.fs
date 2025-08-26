@@ -68,7 +68,7 @@ type FixtureHelper'<'stage, 'unconfirmed, 'matchEvent>() =
                 Error $"Invalid {nameof FixtureEvent'}: {nameof MatchEventAdded} when already added"
         | Some(fixture, rvn), MatchEventRemoved(_, matchEventId) :: t ->
             if fixture.MatchEvents.ContainsKey matchEventId then
-                fixture.MatchEvents.Remove matchEventId |> ignore
+                fixture.MatchEvents.Remove matchEventId |> ignore<bool>
 
                 applyEvents t (Some(fixture, rvn.NextRvn))
             else
