@@ -10,7 +10,7 @@ open System
 open System.Collections.Concurrent
 open System.IO
 
-// Note that EventsFile | SnapshotFile | DirStatus (and FilePersistence module) are not private to faciliate unit testing.
+// Note that EventsFile, EventLine, Snapshot[File|Line], DirStatus, and FilePersistence module are not private in order to facilitate unit testing.
 
 type EventsFile = {
     EventsFileName: string
@@ -18,7 +18,11 @@ type EventsFile = {
     ToRvn: Rvn
 }
 
+type EventLine = EventLine of rvn: Rvn * timestampUtc: DateTime * source: Source * json: Json
+
 type SnapshotFile = { SnapshotFileName: string; Rvn: Rvn }
+
+type SnapshotLine = SnapshotLine of rvn: Rvn * json: Json
 
 type DirStatus =
     | DoesNotExist
@@ -99,7 +103,7 @@ module FilePersistence =
                     eventsFileNames
                     |> Set.difference (snapshotFileNames |> Set.difference allFileNames)
                     |> List.ofSeq
-                    |> List.sortBy id
+                    |> List.sort
 
                 match invalidExtensionFileNames with
                 | [] -> Ok()
@@ -109,7 +113,7 @@ module FilePersistence =
                 match
                     eventsFileNames
                     |> List.ofSeq
-                    |> List.sortBy id
+                    |> List.sort
                     |> List.map parseEventsFileName
                     |> List.sequenceResultA
                 with
@@ -120,7 +124,7 @@ module FilePersistence =
                 match
                     snapshotFileNames
                     |> List.ofSeq
-                    |> List.sortBy id
+                    |> List.sort
                     |> List.map parseSnapshotFileName
                     |> List.sequenceResultA
                 with
@@ -158,7 +162,7 @@ module FilePersistence =
     }
 
 type private Input =
-    | ReadAll of reply: AsyncReplyChannel<Result<(Guid * NonEmptyList<Entry>) list, string list>>
+    | ReadAll of reply: AsyncReplyChannel<Result<(Guid * NonEmptyList<Entry>) list, string>>
     | CreateFromSnapshot of guid: Guid * rvn: Rvn * snapshotJson: Json * reply: AsyncReplyChannel<Result<unit, string>>
     | WriteEvent of
         guid: Guid *
@@ -174,7 +178,7 @@ type private FileReaderAndWriter
         partitionName: PartitionName option,
         entityName: EntityName,
         snapshotFrequency: uint option,
-        stringMode: bool,
+        strictMode: bool,
         clock: IPersistenceClock,
         logger: ILogger
     ) =
@@ -199,24 +203,125 @@ type private FileReaderAndWriter
 
     let pathForError = $@"...\{DirectoryInfo(root).Name}\{subPath}"
 
-    let tryReadAsync (guid: Guid) : Async<Result<NonEmptyList<Entry'>, string>> = asyncResult {
-        (* TODO:
-            -- Error if directory does not exist for Guid...
-            -- Error if directory for Guid is empty...
-            -- Error if any deserialization errors for events | snapshot files...
-            -- If strict mode, consistency check?... *)
+    let tryReadAsync (guid: Guid) : Async<Result<NonEmptyList<Entry>, string>> = asyncResult {
+        try
+            let! dirStatus = FilePersistence.getDirStatus (DirectoryInfo path, guid)
 
-        return! Error "NOT YET IMPLEMENTED"
+            let! snapshotFile, eventsFile =
+                match dirStatus with
+                | DoesNotExist -> Error $"Directory does not exist when reading {guid} for {pathForError}"
+                | Empty -> Error $"Directory is empty when reading {guid} for {pathForError}"
+                | EventsOnly eventsFile -> Ok(None, Some eventsFile)
+                | SnapshotOnly snapshotFile -> Ok(Some snapshotFile, None)
+                | SnapshotAndEvents(snapshotFile, eventsFile) -> Ok(Some snapshotFile, Some eventsFile)
+
+            let! snapshotEntry = asyncResult {
+                match snapshotFile with
+                | Some snapshotFile ->
+                    let! lines = File.ReadAllLinesAsync(Path.Combine(path, snapshotFile.SnapshotFileName))
+
+                    match lines |> List.ofArray with
+                    | [] ->
+                        return!
+                            Error
+                                $"Snapshot file {snapshotFile.SnapshotFileName} is empty when reading {guid} for {pathForError}"
+                    | [ line ] ->
+                        match Json.fromJson<SnapshotLine> (Json line) with
+                        | Ok(SnapshotLine(rvn, json)) when rvn <> snapshotFile.Rvn ->
+                            return!
+                                Error
+                                    $"Expected {snapshotFile.Rvn} for snapshot file {snapshotFile.SnapshotFileName} but deserialized {nameof SnapshotLine} is {rvn} when reading {guid} for {pathForError}"
+                        | Ok(SnapshotLine(rvn, json)) -> return! Ok(Some(SnapshotJson(rvn, json)))
+                        | Error error ->
+                            return!
+                                Error
+                                    $"Deserialization error for snapshot file {snapshotFile.SnapshotFileName} when reading {guid} for {pathForError}: {error}"
+                    | _ ->
+                        return!
+                            Error
+                                $"Snapshot file {snapshotFile.SnapshotFileName} contains multiople lines when reading {guid} for {pathForError}"
+                | None -> return! Ok None
+            }
+
+            let! eventEntries = asyncResult {
+                match eventsFile with
+                | Some eventsFile ->
+                    let! lines = File.ReadAllLinesAsync(Path.Combine(path, eventsFile.EventsFileName))
+
+                    match lines |> List.ofArray with
+                    | [] ->
+                        return!
+                            Error
+                                $"Events file {eventsFile.EventsFileName} is empty when reading {guid} for {pathForError}"
+                    | lines ->
+                        match
+                            lines
+                            |> List.map (fun line -> Json.fromJson<EventLine> (Json line))
+                            |> List.sequenceResultA
+                        with
+                        | Ok eventLines ->
+                            // TODO-PERSISTENCE: Check that eventLines have contiguous Rvns - and that first and last match eventsFile.[From|To]Rvn - even if not strictMode...
+                            return!
+                                Ok(
+                                    eventLines
+                                    |> List.map (fun (EventLine(rvn, timestampUtc, source, json)) ->
+                                        EventJson(rvn, timestampUtc, source, json))
+                                )
+                        | Error errors ->
+                            return!
+                                Error
+                                    $"One or more deserialization error for events file {eventsFile.EventsFileName} when reading {guid} for {pathForError}: {errors}"
+                | None -> return! Ok []
+            }
+
+            return!
+                match snapshotEntry with
+                | Some snapshotEntry -> Ok(NonEmptyList.Create<Entry>(snapshotEntry, eventEntries))
+                | None -> NonEmptyList.FromList eventEntries // note: NonEmptyList.FromList should never return Error as logic above ensures that eventEntries is not empty
+        with exn ->
+            return! Error $"Exception when reading {guid} for {pathForError}: {exn.Message}"
     }
 
-    let tryReadAllAsync () : Async<Result<(Guid * NonEmptyList<Entry>) list, string list>> = asyncResult {
-        (* TODO:
-            -- Error if non-Guid directories exist...
-            -- Error if any files exist...
-            -- Call tryReadAsync for each Guid directory and "merge" results (via List.sequenceResultA)...
-            -- Create path if does not exist?... *)
+    let tryReadAllAsync () = asyncResult {
+        try
+            if not (Directory.Exists path) then
+                Directory.CreateDirectory path |> ignore<DirectoryInfo>
 
-        return! Error [ "NOT YET IMPLEMENTED" ]
+            let! _ =
+                match (DirectoryInfo path).GetFiles() |> List.ofArray |> List.map _.Name with
+                | [] -> Ok()
+                | fileNames -> Error $"Files exist when reading all for {pathForError}: {fileNames}"
+
+            let dirAndGuids =
+                (DirectoryInfo path).EnumerateDirectories()
+                |> List.ofSeq
+                |> List.map (fun dir ->
+                    match Guid.TryParse(dir.Name) with
+                    | true, guid -> dir, Some guid
+                    | false, _ -> dir, None)
+
+            let! guids =
+                match
+                    dirAndGuids
+                    |> List.choose (fun (dir, guid) -> if guid.IsNone then Some(dir.Name) else None)
+                with
+                | [] -> Ok(dirAndGuids |> List.choose snd)
+                | dirNames ->
+                    Error $"Non-{nameof Guid} directories exist when reading all for {pathForError}: {dirNames}"
+
+            let! results =
+                guids
+                |> List.sort
+                |> List.map (fun guid -> tryReadAsync guid |> AsyncResult.map (fun list -> guid, list))
+                |> Async.Parallel
+
+            return!
+                results
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors -> $"One or more error when reading all for {pathForError}: {errors}")
+        with exn ->
+            return! Error $"Exception when reading all for {pathForError}: {exn.Message}"
     }
 
     let tryCreateFromSnapshotAsync (guid: Guid, rvn: Rvn, snapshotJson: Json) = asyncResult {
@@ -240,13 +345,13 @@ type private FileReaderAndWriter
             let snapshotFilePath =
                 Path.Combine(pathForGuid, FilePersistence.getSnapshotFileName rvn)
 
-            let (Json snapshotLine) = Json.toJson (SnapshotJson(rvn, snapshotJson))
+            let (Json snapshotLine) = Json.toJson (SnapshotLine(rvn, snapshotJson))
 
             do! File.WriteAllLinesAsync(snapshotFilePath, [| snapshotLine |])
 
             return! Ok()
         with exn ->
-            return! Error $"Error when creating from snapshot for {guid} in {pathForError}: {exn.Message}"
+            return! Error $"Exception when creating from snapshot for {guid} in {pathForError}: {exn.Message}"
     }
 
     let tryWriteEventAsync (guid: Guid, rvn: Rvn, source: Source, event: IEvent, getSnapshot: GetSnapshot option) = asyncResult {
@@ -284,7 +389,7 @@ type private FileReaderAndWriter
                 Directory.CreateDirectory pathForGuid |> ignore<DirectoryInfo>
 
             let (Json eventLine) =
-                Json.toJson (EventJson(rvn, clock.GetUtcNow(), source, event.EventJson))
+                Json.toJson (EventLine(rvn, clock.GetUtcNow(), source, event.EventJson))
 
             match appendToEventsFile with
             | Some eventsFile ->
@@ -317,7 +422,7 @@ type private FileReaderAndWriter
 
             return! Ok()
         with exn ->
-            return! Error $"Error when writing event for {guid} in {pathForError}: {exn.Message}"
+            return! Error $"Exception when writing event for {guid} in {pathForError}: {exn.Message}"
     }
 
     let agent =
@@ -331,7 +436,7 @@ type private FileReaderAndWriter
 
                     match result with
                     | Ok list -> logger.Verbose("...all ({length}) read", list.Length)
-                    | Error errors -> logger.Error("...error/s when reading all: {errors}", errors)
+                    | Error error -> logger.Error("...error when reading all: {error}", error)
 
                     reply.Reply result
                     return! loop ()
@@ -368,7 +473,8 @@ type private FileReaderAndWriter
 
             loop ())
 
-    do agent.Error.Add(fun exn -> logger.Error("Unexpected error: {message} at {target}", exn.Message, exn.TargetSite))
+    do // handler for agent exception
+        agent.Error.Add(fun exn -> logger.Error("Exception: {message} at {target}", exn.Message, exn.TargetSite))
 
     interface IReader with
         member _.ReadAllAsync() =

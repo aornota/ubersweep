@@ -1,5 +1,7 @@
 namespace Aornota.Ubersweep.Server.Migration
 
+// TODO-MIGRATION: Change use of Result (and in Migration project) so that Error case is always string (rather than string list)?...
+
 open Aornota.Ubersweep.Migration
 open Aornota.Ubersweep.Migration.Domain
 open Aornota.Ubersweep.Migration.Events
@@ -62,9 +64,10 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
     member private _.Check<'state, 'event when 'state :> IState<'state, 'event>>() = asyncResult {
         logger.Debug("...checking {type}s for {partitionName}...", sanitize typeof<'event>, partitionName)
         let reader = persistenceFactory.GetReader<'state, 'event>(Some partitionName)
+
         let! all = reader.ReadAllAsync()
 
-        let! _ =
+        return!
             if all.Length = 0 then
                 logger.Debug(
                     "...can migrate as {type}s do not already exist for {partitionName}",
@@ -75,14 +78,12 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 Ok()
             else
                 logger.Error(
-                    "...cannot migrate as {type}s already exist for {partitionName} (or other error)",
+                    "...cannot migrate as {type}s already exist for {partitionName}",
                     sanitize typeof<'event>,
                     partitionName
                 )
 
-                Error []
-
-        return ()
+                Error String.Empty
     }
 
     member this.CheckAll() = asyncResult {

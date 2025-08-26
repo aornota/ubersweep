@@ -25,7 +25,7 @@ type PartitionName = string
 type EntityName = string
 
 type IReader =
-    abstract ReadAllAsync: unit -> Async<Result<(Guid * NonEmptyList<Entry>) list, string list>>
+    abstract ReadAllAsync: unit -> Async<Result<(Guid * NonEmptyList<Entry>) list, string>>
 
 type IWriter =
     // TODO-PERSISTENCE...abstract ArchiveAllAsync: (Guid * NonEmptyList<Entry> -> Rvn * Json) -> Async<Result<unit, string list>>
