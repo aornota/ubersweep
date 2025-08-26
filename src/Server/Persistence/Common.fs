@@ -28,7 +28,7 @@ type IReader =
     abstract ReadAllAsync: unit -> Async<Result<(Guid * NonEmptyList<Entry>) list, string list>>
 
 type IWriter =
-    // TODO-PERSISTENCE: ArchiveAllAsync?...
+    // TODO-PERSISTENCE...abstract ArchiveAllAsync: (Guid * NonEmptyList<Entry> -> Rvn * Json) -> Async<Result<unit, string list>>
     abstract CreateFromSnapshotAsync: Guid * Rvn * Json -> Async<Result<unit, string>>
     abstract WriteEventAsync: Guid * Rvn * Source * IEvent * GetSnapshot option -> Async<Result<unit, string>>
 

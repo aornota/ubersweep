@@ -28,9 +28,9 @@
     <Compile Include="Entities\Sweepstake.fs" />
     <Compile Include="Entities\User.fs" />
     <Compile Include="Entities\UserDraft.fs" />
-    <Compile Include="TEMP-Storage.fs" />
     <Compile Include="Migration\Mappers.fs" />
     <Compile Include="Migration\Migration.fs" />
+    <Compile Include="TEMP-Storage.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Host.fs" />
   </ItemGroup>

@@ -199,21 +199,27 @@ type private FileReaderAndWriter
 
     let pathForError = $@"...\{DirectoryInfo(root).Name}\{subPath}"
 
-    let tryRead (guid: Guid) : Async<Result<NonEmptyList<Entry'>, string>> = asyncResult {
-        (* TODO...
-        *)
+    let tryReadAsync (guid: Guid) : Async<Result<NonEmptyList<Entry'>, string>> = asyncResult {
+        (* TODO:
+            -- Error if directory does not exist for Guid...
+            -- Error if directory for Guid is empty...
+            -- Error if any deserialization errors for events | snapshot files...
+            -- If strict mode, consistency check?... *)
 
-        return! Error "TEMP"
+        return! Error "NOT YET IMPLEMENTED"
     }
 
     let tryReadAllAsync () : Async<Result<(Guid * NonEmptyList<Entry>) list, string list>> = asyncResult {
-        (* TODO...
-        *)
+        (* TODO:
+            -- Error if non-Guid directories exist...
+            -- Error if any files exist...
+            -- Call tryReadAsync for each Guid directory and "merge" results (via List.sequenceResultA)...
+            -- Create path if does not exist?... *)
 
-        return! Ok []
+        return! Error [ "NOT YET IMPLEMENTED" ]
     }
 
-    let tryCreateFromSnapshot (guid: Guid, rvn: Rvn, snapshotJson: Json) = asyncResult {
+    let tryCreateFromSnapshotAsync (guid: Guid, rvn: Rvn, snapshotJson: Json) = asyncResult {
         try
             let! dirStatus = FilePersistence.getDirStatus (DirectoryInfo path, guid)
 
@@ -243,7 +249,7 @@ type private FileReaderAndWriter
             return! Error $"Error when creating from snapshot for {guid} in {pathForError}: {exn.Message}"
     }
 
-    let tryWriteEvent (guid: Guid, rvn: Rvn, source: Source, event: IEvent, getSnapshot: GetSnapshot option) = asyncResult {
+    let tryWriteEventAsync (guid: Guid, rvn: Rvn, source: Source, event: IEvent, getSnapshot: GetSnapshot option) = asyncResult {
         try
             let! dirStatus = FilePersistence.getDirStatus (DirectoryInfo path, guid)
 
@@ -332,7 +338,7 @@ type private FileReaderAndWriter
                 | CreateFromSnapshot(guid, rvn, snapshotJson, reply) ->
                     logger.Verbose("Creating from snapshot for {guid} ({rvn})...", guid, rvn)
 
-                    let! result = tryCreateFromSnapshot (guid, rvn, snapshotJson)
+                    let! result = tryCreateFromSnapshotAsync (guid, rvn, snapshotJson)
 
                     match result with
                     | Ok _ -> logger.Verbose("...created from snapshot for {guid} ({rvn})", guid, rvn)
@@ -349,7 +355,7 @@ type private FileReaderAndWriter
                 | WriteEvent(guid, rvn, source, event, getSnapsot, reply) ->
                     logger.Verbose("Writing event for {guid} ({rvn})...", guid, rvn)
 
-                    let! result = tryWriteEvent (guid, rvn, source, event, getSnapsot)
+                    let! result = tryWriteEventAsync (guid, rvn, source, event, getSnapsot)
 
                     match result with
                     | Ok _ -> logger.Verbose("...event written for {guid} ({rvn})", guid, rvn)

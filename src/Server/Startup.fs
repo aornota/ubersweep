@@ -33,7 +33,7 @@ module private Startup =
     let private superUserPasswordHash =
         "+eAhZRK85XUDQjEJ4HEwACNgCN607/BbfiWjcRjr4/WIyqGzMVhGlFtO7lhWSB9fwWzi4Nbzf74Kznm25WmSSw=="
 
-    // TODO-STARTUP: Change this to create SuperUser if no SuperUsers exist? And to populate "UserCache"? And do something similar for Fifa-2026 Sweepstake?...
+    // TODO-STARTUP: Change this to create SuperUser if no SuperUsers exist (even if other Users exist)? And to populate "UserCache"? And do something similar for Fifa-2026 Sweepstake?...
     let checkUsersAsync (persistenceFactory: IPersistenceFactory, source: Source, logger: ILogger) = async {
         logger.Information("...checking {User}s...", nameof User)
         let reader = persistenceFactory.GetReader<User, UserEvent> None
