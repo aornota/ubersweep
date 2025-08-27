@@ -6,6 +6,7 @@ open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
 open System
+open Thoth.Json.Net
 
 type FixtureInitEvent<'stage, 'unconfirmed> =
     | FixtureCreated of
@@ -80,6 +81,21 @@ type FixtureHelper<'stage, 'unconfirmed, 'matchEvent>() =
             FixtureEvent<'matchEvent>
          >()
 
+    let eventDecoder =
+        Decode.Auto.generateDecoderCached<FixtureEvent<'matchEvent>> (Json.caseStrategy, Json.extraCoders)
+
+    let initEventDecoder =
+        Decode.Auto.generateDecoderCached<FixtureInitEvent<'stage, 'unconfirmed>> (Json.caseStrategy, Json.extraCoders)
+
+    let stateDecoder =
+        Decode.Auto.generateDecoderCached<Fixture<'stage, 'unconfirmed, 'matchEvent>> (
+            Json.caseStrategy,
+            Json.extraCoders
+        )
+
+    override _.DecodeEvent(Json json) = Decode.fromString eventDecoder json
+    override _.DecodeInitEvent(Json json) = Decode.fromString initEventDecoder json
+    override _.DecodeState(Json json) = Decode.fromString stateDecoder json
     override _.IdFromGuid guid = FixtureId.FromGuid guid
 
     override _.InitFromCommand(guid, CreateFixture(stage, homeParticipant, awayParticipant, kickOff)) =

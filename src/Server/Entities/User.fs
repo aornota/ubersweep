@@ -5,6 +5,7 @@ open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
+open Thoth.Json.Net
 
 // TODO-ENTITIES: Think about permissions...
 
@@ -56,6 +57,18 @@ type User = {
 type UserHelper() =
     inherit EntityHelper<UserId, User, UserInitCommand, UserInitEvent, UserEvent>()
 
+    let eventDecoder =
+        Decode.Auto.generateDecoderCached<UserEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let initEventDecoder =
+        Decode.Auto.generateDecoderCached<UserInitEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let stateDecoder =
+        Decode.Auto.generateDecoderCached<User> (Json.caseStrategy, Json.extraCoders)
+
+    override _.DecodeEvent(Json json) = Decode.fromString eventDecoder json
+    override _.DecodeInitEvent(Json json) = Decode.fromString initEventDecoder json
+    override _.DecodeState(Json json) = Decode.fromString stateDecoder json
     override _.IdFromGuid guid = UserId.FromGuid guid
 
     override _.InitFromCommand(guid, CreateUser(userName, password, userType)) =

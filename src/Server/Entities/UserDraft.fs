@@ -5,7 +5,7 @@ open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
-open System
+open Thoth.Json.Net
 
 type UserDraftInitEvent =
     | UserDraftCreated of userId: UserId * draftId: DraftId
@@ -85,6 +85,18 @@ type UserDraft = {
 type UserDraftelper() =
     inherit EntityHelper<UserDraftId, UserDraft, UserDraftInitCommand, UserDraftInitEvent, UserDraftEvent>()
 
+    let eventDecoder =
+        Decode.Auto.generateDecoderCached<UserDraftEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let initEventDecoder =
+        Decode.Auto.generateDecoderCached<UserDraftInitEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let stateDecoder =
+        Decode.Auto.generateDecoderCached<UserDraft> (Json.caseStrategy, Json.extraCoders)
+
+    override _.DecodeEvent(Json json) = Decode.fromString eventDecoder json
+    override _.DecodeInitEvent(Json json) = Decode.fromString initEventDecoder json
+    override _.DecodeState(Json json) = Decode.fromString stateDecoder json
     override _.IdFromGuid guid = UserDraftId.FromGuid guid
 
     override _.InitFromCommand(guid, CreateUserDraft(userId, draftId)) =

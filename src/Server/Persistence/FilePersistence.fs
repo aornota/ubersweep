@@ -4,12 +4,12 @@ open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Shared.Common
 
 open FsToolkit.ErrorHandling
-open Thoth.Json.Net
 open Microsoft.Extensions.Configuration
 open Serilog
 open System
 open System.Collections.Concurrent
 open System.IO
+open Thoth.Json.Net
 
 // Note that EventsFile, EventLine, Snapshot[File|Line], DirStatus, and FilePersistence module are not private in order to facilitate unit testing.
 
@@ -46,19 +46,39 @@ module FilePersistence =
     let private snapshotLineDecoder =
         Decode.Auto.generateDecoderCached<SnapshotLine> (Json.caseStrategy, Json.extraCoders)
 
-    let decodeEventLine (Json json) = Decode.fromString eventLineDecoder json
+    let private decodeEventLine (Json json) = Decode.fromString eventLineDecoder json
 
-    let decodeSnapshotLine (Json json) =
+    let private decodeSnapshotLine (Json json) =
         Decode.fromString snapshotLineDecoder json
 
     let tryDecodeEventsFileAsync (path: string, eventsFile: EventsFile) = asyncResult {
-        // TODO: Concistency check (i.e. first / last / contiguous revisions)...
+        let rec checkEventLines expectedFirstRvn expectedLastRvn previousRvn eventLines =
+            match eventLines, previousRvn with
+            | EventLine(rvn, _, _, _) :: t, None ->
+                if rvn = expectedFirstRvn then
+                    checkEventLines expectedFirstRvn expectedLastRvn (Some rvn) t
+                else
+                    Error
+                        $"Expected first {expectedFirstRvn} for events file {eventsFile.EventsFileName} but decoded first {nameof EventLine} is {rvn}"
+            | EventLine(rvn, _, _, _) :: t, Some previousRvn ->
+                if rvn = previousRvn.NextRvn then
+                    checkEventLines expectedFirstRvn expectedLastRvn (Some rvn) t
+                else
+                    Error
+                        $"Events file {eventsFile.EventsFileName} has decoded {nameof EventLine} with {rvn} not contiguous with previous decoded {nameof EventLine} ({previousRvn})"
+            | [], None -> Error $"Events file {eventsFile.EventsFileName} has no decoded {nameof EventLine}s" // should never happen as logic below ensures that eventLines is not empty on the first call
+            | [], Some previousRvn ->
+                if previousRvn = expectedLastRvn then
+                    Ok()
+                else
+                    Error
+                        $"Expected last {expectedLastRvn} for events file {eventsFile.EventsFileName} but decoded last {nameof EventLine} is {previousRvn}"
 
         try
             let! lines = File.ReadAllLinesAsync(Path.Combine(path, eventsFile.EventsFileName))
 
             match lines |> List.ofArray with
-            | [] -> return! Error $"Snspshot file {eventsFile.EventsFileName} is empty"
+            | [] -> return! Error $"Events file {eventsFile.EventsFileName} is empty"
             | lines ->
                 match
                     lines
@@ -66,7 +86,8 @@ module FilePersistence =
                     |> List.sequenceResultA
                 with
                 | Ok eventLines ->
-                    // TODO-PERSISTENCE: Check that eventLines have contiguous Rvns - and that first and last match eventsFile.[From|To]Rvn - even if not strictMode...
+                    let! _ = checkEventLines eventsFile.FirstRvn eventsFile.LastRvn None eventLines
+
                     return!
                         Ok(
                             eventLines
@@ -113,7 +134,7 @@ module FilePersistence =
         | 0u -> Error $"{nameof Rvn} for name of snapshot file must not be {Rvn 0u}"
         | _ -> Ok $"{rvn}.{snapshotFileExtension}"
 
-    let getDirStatusAsync (dir: DirectoryInfo, guid: Guid) = asyncResult {
+    let getDirStatusAsync (dir: DirectoryInfo, guid: Guid, strictMode) = asyncResult {
         let parseEventsFileName (fileName: string) =
             let fileNameWithoutExtension = Path.GetFileNameWithoutExtension fileName
 
@@ -200,6 +221,8 @@ module FilePersistence =
                 | Ok snapshotFiles -> Ok snapshotFiles
                 | Error errors -> Error $"There are snapshot file/s with invalid names in {pathForError}: {errors}"
 
+            // TODO-PERSISTENCE: If strictMode, call tryDecode[Events|Snapshot]FileAsync for all [events|snapshot]Files...
+
             return!
                 match eventsFiles, snapshotFiles with
                 | [], [] -> Ok Empty
@@ -214,7 +237,7 @@ module FilePersistence =
                     Error
                         $"There are multiple snapshot files and no events files in {pathForError}: {snapshotFileNames}"
                 | _ ->
-                    (* TODO-PERSISTENCE: Check consistency of events and snapshot files - but only if strictMode?...
+                    (* TODO-PERSISTENCE: Check consistency of events and snapshot files (irrespective of strictMode)...
                         -- First events file must be from Rvn.InitialRvn (unless follows snapshot file)...
                         -- Events and snapshot files must be contiguous... *)
 
@@ -275,7 +298,7 @@ type private FileReaderAndWriter
     let tryReadAsync (guid: Guid) : Async<Result<NonEmptyList<Entry>, string>> = asyncResult {
         try
             let! dirStatus = async {
-                let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid)
+                let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid, strictMode) // use strictMode here when reading
 
                 match result with
                 | Ok dirStatus -> return Ok dirStatus
@@ -365,7 +388,7 @@ type private FileReaderAndWriter
     let tryCreateFromSnapshotAsync (guid: Guid, rvn: Rvn, snapshotJson: Json) = asyncResult {
         try
             let! dirStatus = async {
-                let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid)
+                let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid, false) // ignore strictMode here when creating
 
                 match result with
                 | Ok dirStatus -> return Ok dirStatus
@@ -400,7 +423,7 @@ type private FileReaderAndWriter
     let tryWriteEventAsync (guid: Guid, rvn: Rvn, source: Source, event: IEvent, getSnapshot: GetSnapshot option) = asyncResult {
         try
             let! dirStatus = async {
-                let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid)
+                let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid, false) // ignore strictMode here when writing
 
                 match result with
                 | Ok dirStatus -> return Ok dirStatus

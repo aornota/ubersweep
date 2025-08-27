@@ -30,6 +30,9 @@ type Entity<'id, 'state, 'event when 'id :> IId and 'state :> IState<'state, 'ev
 [<AbstractClass>]
 type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
     when 'id :> IId and 'state :> IState<'state, 'event> and 'initEvent :> IEvent and 'event :> IEvent>() =
+    abstract member DecodeEvent: Json -> Result<'event, string>
+    abstract member DecodeInitEvent: Json -> Result<'initEvent, string>
+    abstract member DecodeState: Json -> Result<'state, string>
     abstract member IdFromGuid: Guid -> 'id
     abstract member InitFromCommand: Guid * 'initCommand -> Entity<'id, 'state, 'event> * 'initEvent
     abstract member InitFromEvent: Guid * 'initEvent -> Entity<'id, 'state, 'event>
@@ -40,7 +43,7 @@ type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
             | h :: t ->
                 match h with
                 | EventJson(_, _, _, json) ->
-                    match Json.decode<'event> json with
+                    match this.DecodeEvent json with
                     | Ok event -> mapToEvents t (event :: events)
                     | Error error -> Error error
                 | SnapshotJson _ -> Error $"Subsequent entries contain a {nameof SnapshotJson}"
@@ -52,7 +55,7 @@ type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
         let! entityFromFirstEntry, subsequentEntries =
             match entries.Head with
             | SnapshotJson(rvn, json) -> result {
-                let! state = Json.decode<'state> json
+                let! state = this.DecodeState json
 
                 return
                     {
@@ -63,7 +66,7 @@ type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
                     entries.Tail
               }
             | EventJson(_, _, _, json) -> result {
-                let! initEvent = Json.decode<'initEvent> json
+                let! initEvent = this.DecodeInitEvent json
                 return this.InitFromEvent(guid, initEvent), entries.Tail
               }
 

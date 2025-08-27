@@ -6,6 +6,7 @@ open Aornota.Ubersweep.Shared.Common
 
 open FsToolkit.ErrorHandling
 open System
+open Thoth.Json.Net
 
 type CounterId =
     private
@@ -67,6 +68,18 @@ type Counter = {
 type CounterEventHelper() =
     inherit EntityHelper<CounterId, Counter, CounterInitCommand, CounterInitEvent, CounterEvent>()
 
+    let eventDecoder =
+        Decode.Auto.generateDecoderCached<CounterEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let initEventDecoder =
+        Decode.Auto.generateDecoderCached<CounterInitEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let stateDecoder =
+        Decode.Auto.generateDecoderCached<Counter> (Json.caseStrategy, Json.extraCoders)
+
+    override _.DecodeEvent(Json json) = Decode.fromString eventDecoder json
+    override _.DecodeInitEvent(Json json) = Decode.fromString initEventDecoder json
+    override _.DecodeState(Json json) = Decode.fromString stateDecoder json
     override _.IdFromGuid guid = CounterId.FromGuid guid
 
     override _.InitFromCommand(guid, Initialize count) =

@@ -6,6 +6,7 @@ open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
 open System
+open Thoth.Json.Net
 
 type PostInitEvent =
     | PostCreated of userId: UserId * postType: PostType * messageText: Markdown * timestamp: DateTimeOffset
@@ -40,6 +41,18 @@ type Post = {
 type PostHelper() =
     inherit EntityHelper<PostId, Post, PostInitCommand, PostInitEvent, PostEvent>()
 
+    let eventDecoder =
+        Decode.Auto.generateDecoderCached<PostEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let initEventDecoder =
+        Decode.Auto.generateDecoderCached<PostInitEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let stateDecoder =
+        Decode.Auto.generateDecoderCached<Post> (Json.caseStrategy, Json.extraCoders)
+
+    override _.DecodeEvent(Json json) = Decode.fromString eventDecoder json
+    override _.DecodeInitEvent(Json json) = Decode.fromString initEventDecoder json
+    override _.DecodeState(Json json) = Decode.fromString stateDecoder json
     override _.IdFromGuid guid = PostId.FromGuid guid
 
     override _.InitFromCommand(guid, CreatePost(userId, postType, messageText, timestamp)) =

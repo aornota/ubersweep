@@ -6,6 +6,7 @@ open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
 open System
+open Thoth.Json.Net
 
 type DraftInitEvent =
     | DraftCreated of draftType: DraftType
@@ -93,6 +94,19 @@ type Draft = {
 
 type DraftHelper() =
     inherit EntityHelper<DraftId, Draft, DraftInitCommand, DraftInitEvent, DraftEvent>()
+
+    let eventDecoder =
+        Decode.Auto.generateDecoderCached<DraftEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let initEventDecoder =
+        Decode.Auto.generateDecoderCached<DraftInitEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let stateDecoder =
+        Decode.Auto.generateDecoderCached<Draft> (Json.caseStrategy, Json.extraCoders)
+
+    override _.DecodeEvent(Json json) = Decode.fromString eventDecoder json
+    override _.DecodeInitEvent(Json json) = Decode.fromString initEventDecoder json
+    override _.DecodeState(Json json) = Decode.fromString stateDecoder json
 
     override _.IdFromGuid guid = DraftId.FromGuid guid
 

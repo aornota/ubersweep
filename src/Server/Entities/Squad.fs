@@ -6,6 +6,7 @@ open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
 open System
+open Thoth.Json.Net
 
 type SquadInitEvent<'group> =
     | SquadCreated of squadName: string * group: 'group * seeding: Seeding option * coachName: string
@@ -98,6 +99,18 @@ type SquadHelper<'group, 'playerType>() =
             SquadEvent<'playerType>
          >()
 
+    let eventDecoder =
+        Decode.Auto.generateDecoderCached<SquadEvent<'playerType>> (Json.caseStrategy, Json.extraCoders)
+
+    let initEventDecoder =
+        Decode.Auto.generateDecoderCached<SquadInitEvent<'group>> (Json.caseStrategy, Json.extraCoders)
+
+    let stateDecoder =
+        Decode.Auto.generateDecoderCached<Squad<'group, 'playerType>> (Json.caseStrategy, Json.extraCoders)
+
+    override _.DecodeEvent(Json json) = Decode.fromString eventDecoder json
+    override _.DecodeInitEvent(Json json) = Decode.fromString initEventDecoder json
+    override _.DecodeState(Json json) = Decode.fromString stateDecoder json
     override _.IdFromGuid guid = SquadId.FromGuid guid
 
     override _.InitFromCommand(guid, CreateSquad(squadName, group, seeding, coachName)) =

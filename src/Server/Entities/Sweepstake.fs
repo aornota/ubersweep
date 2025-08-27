@@ -5,6 +5,7 @@ open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Shared.Entities
 
 open FsToolkit.ErrorHandling
+open Thoth.Json.Net
 
 type SweepstakeInitEvent =
     | SweepstakeCreated of
@@ -48,6 +49,18 @@ type Sweepstake = {
 type SweepstakeHelper() =
     inherit EntityHelper<SweepstakeId, Sweepstake, SweepstakeInitCommand, SweepstakeInitEvent, SweepstakeEvent>()
 
+    let eventDecoder =
+        Decode.Auto.generateDecoderCached<SweepstakeEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let initEventDecoder =
+        Decode.Auto.generateDecoderCached<SweepstakeInitEvent> (Json.caseStrategy, Json.extraCoders)
+
+    let stateDecoder =
+        Decode.Auto.generateDecoderCached<Sweepstake> (Json.caseStrategy, Json.extraCoders)
+
+    override _.DecodeEvent(Json json) = Decode.fromString eventDecoder json
+    override _.DecodeInitEvent(Json json) = Decode.fromString initEventDecoder json
+    override _.DecodeState(Json json) = Decode.fromString stateDecoder json
     override _.IdFromGuid guid = SweepstakeId.FromGuid guid
 
     override _.InitFromCommand
