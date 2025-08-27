@@ -356,7 +356,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                     root
                 )
             else
-                logger.Error("Value for {rootKey} configuration setting is missing", rootKey)
+                logger.Warning("Value for {rootKey} configuration setting is missing", rootKey)
 
     let writeUsersAsync (users: (Guid * User' * Rvn) list) = asyncResult {
         let writer = persistenceFactory.GetWriter<User, UserEvent> None
@@ -425,270 +425,277 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             |> List.map (fun (guid, _, user, _) -> UserId'.UserId guid, user.UserName)
             |> Map.ofList
 
-        if not migrateOnStartUp then
+        if migrateOnStartUp then
+            let! _ = // error if value for root not configured
+                if not isConfiguredRoot then
+                    logger.Error("Cannot migrate as value for {rootKey} configuration setting is missing", rootKey)
+
+                    Error "Configured to migrate on startup but value for {rootKey} configuration setting is missing"
+                else
+                    Ok()
+
+            logger.Debug "Starting migration..."
+
+            logger.Debug("...checking {User}s...", nameof User)
+            let reader = persistenceFactory.GetReader<User, UserEvent> None
+            let! all = reader.ReadAllAsync()
+
+            let! _ = // error if Users already exist
+                if all.Length = 0 then
+                    logger.Debug("...can migrate as {User}s do not already exist", nameof User)
+                    Ok()
+                else
+                    logger.Error("...cannot migrate as {User}s already exist", nameof User)
+                    Error $"Cannot migrate as {nameof User}s already exist"
+
+            logger.Debug("...checking {Sweepstake}s...", nameof Sweepstake)
+            let reader = persistenceFactory.GetReader<Sweepstake, SweepstakeEvent> None
+            let! all = reader.ReadAllAsync()
+
+            let! _ = // error if Sweepstakes already exist
+                if all.Length = 0 then
+                    logger.Debug("...can migrate as {Sweepstake}s do not already exist", nameof Sweepstake)
+                    Ok()
+                else
+                    logger.Error("...cannot migrate as {Sweepstake}s already exist", nameof Sweepstake)
+                    Error $"Cannot migrate as {nameof Sweepstake}s already exist"
+
+            let fifa2018 = {
+                SweepstakeCommon = {
+                    SweepstakeType = Fifa
+                    Year = 2018u
+                    Description = "The world-famous World Cup 2018 sweepstake"
+                    Logo =
+                        "https://github.com/aornota/sweepstake-2018/blob/master/src/resources/images/sweepstake-2018-24x24.png"
+                    MaxPlayersPerSquad = 23u
+                    Status = Archived
+                }
+            }
+
+            let rwc2019 = {
+                SweepstakeCommon = {
+                    SweepstakeType = Rwc
+                    Year = 2019u
+                    Description = "The world-famous Rugby World Cup 2019 sweepstake"
+                    Logo =
+                        "https://github.com/aornota/sweepstake-2019/blob/master/src/ui/public/sweepstake-2019-24x24.png"
+                    MaxPlayersPerSquad = 31u
+                    Status = Archived
+                }
+            }
+
+            let euro2020 = {
+                SweepstakeCommon = {
+                    SweepstakeType = Euro
+                    Year = 2020u
+                    Description = "The world-famous Euro 2020 sweepstake"
+                    Logo =
+                        "https://github.com/aornota/sweepstake-2021/blob/master/src/ui/public/sweepstake-2021-24x24.png"
+                    MaxPlayersPerSquad = 26u
+                    Status = Archived
+                }
+            }
+
+            let fifa2022 = {
+                SweepstakeCommon = {
+                    SweepstakeType = Fifa
+                    Year = 2022u
+                    Description = "The world-famous World Cup 2022 sweepstake"
+                    Logo =
+                        "https://github.com/aornota/sweepstake-2022/blob/main/src/ui/public/sweepstake-2022-24x24.png"
+                    MaxPlayersPerSquad = 26u
+                    Status = Archived
+                }
+            }
+
+            let rwc2023 = {
+                SweepstakeCommon = {
+                    SweepstakeType = Rwc
+                    Year = 2023u
+                    Description = "The world-famous Rugby World Cup 2023 sweepstake"
+                    Logo =
+                        "https://github.com/aornota/sweepstake-2023/blob/main/src/ui/public/sweepstake-2023-24x24.png"
+                    MaxPlayersPerSquad = 33u
+                    Status = Archived
+                }
+            }
+
+            let euro2024 = {
+                SweepstakeCommon = {
+                    SweepstakeType = Euro
+                    Year = 2024u
+                    Description = "The world-famous Euro 2024 sweepstake"
+                    Logo =
+                        "https://github.com/aornota/sweepstake-2024/blob/main/src/ui/public/sweepstake-2024-24x24.png"
+                    MaxPlayersPerSquad = 26u
+                    Status = Archived
+                }
+            }
+
+            logger.Debug "...checking partitions..."
+
+            let helperFifa2018 =
+                PartitionHelper<
+                    GroupAToH,
+                    StageFifa,
+                    Unconfirmed<StageFifa, GroupAToH>,
+                    PlayerTypeFootball,
+                    MatchEventFootball,
+                    UnconfirmedFifa',
+                    MatchEventFootball'
+                 >(
+                    root,
+                    fifa2018.SweepstakeCommon.PartitionName,
+                    Partition.fifa2018,
+                    mapFixtureFifa,
+                    mapSquadFifa,
+                    persistenceFactory,
+                    logger
+                )
+
+            let helperRwc2019 =
+                PartitionHelper<
+                    GroupAToD,
+                    StageRwc,
+                    Unconfirmed<StageRwc, GroupAToD>,
+                    PlayerTypeRugby,
+                    MatchEventRugby,
+                    UnconfirmedRwc',
+                    MatchEventRugby'
+                 >(
+                    root,
+                    rwc2019.SweepstakeCommon.PartitionName,
+                    Partition.rwc2019,
+                    mapFixtureRwc,
+                    mapSquadRwc,
+                    persistenceFactory,
+                    logger
+                )
+
+            let helperEuro2020 =
+                PartitionHelper<
+                    GroupAToF,
+                    StageEuro,
+                    UnconfirmedEuro,
+                    PlayerTypeFootball,
+                    MatchEventFootball,
+                    UnconfirmedEuro',
+                    MatchEventFootball'
+                 >(
+                    root,
+                    euro2020.SweepstakeCommon.PartitionName,
+                    Partition.euro2020,
+                    mapFixtureEuro,
+                    mapSquadEuro,
+                    persistenceFactory,
+                    logger
+                )
+
+            let helperFifa2022 =
+                PartitionHelper<
+                    GroupAToH,
+                    StageFifa,
+                    Unconfirmed<StageFifa, GroupAToH>,
+                    PlayerTypeFootball,
+                    MatchEventFootball,
+                    UnconfirmedFifaV2',
+                    MatchEventFootball'
+                 >(
+                    root,
+                    fifa2022.SweepstakeCommon.PartitionName,
+                    Partition.fifa2022,
+                    mapFixtureFifaV2,
+                    mapSquadFifa,
+                    persistenceFactory,
+                    logger
+                )
+
+            let helperRwc2023 =
+                PartitionHelper<
+                    GroupAToD,
+                    StageRwc,
+                    Unconfirmed<StageRwc, GroupAToD>,
+                    PlayerTypeRugby,
+                    MatchEventRugby,
+                    UnconfirmedRwc',
+                    MatchEventRugby'
+                 >(
+                    root,
+                    rwc2023.SweepstakeCommon.PartitionName,
+                    Partition.rwc2023,
+                    mapFixtureRwc,
+                    mapSquadRwc,
+                    persistenceFactory,
+                    logger
+                )
+
+            let helperEuro2024 =
+                PartitionHelper<
+                    GroupAToF,
+                    StageEuro,
+                    UnconfirmedEuro,
+                    PlayerTypeFootball,
+                    MatchEventFootball,
+                    UnconfirmedEuro',
+                    MatchEventFootball'
+                 >(
+                    root,
+                    euro2024.SweepstakeCommon.PartitionName,
+                    Partition.euro2024,
+                    mapFixtureEuro,
+                    mapSquadEuro,
+                    persistenceFactory,
+                    logger
+                )
+
+            let! _ = helperFifa2018.CheckAllAsync()
+            let! _ = helperRwc2019.CheckAllAsync()
+            let! _ = helperEuro2020.CheckAllAsync()
+            let! _ = helperFifa2022.CheckAllAsync()
+            let! _ = helperRwc2023.CheckAllAsync()
+            let! _ = helperEuro2024.CheckAllAsync()
+
+            logger.Debug("...mapping {User}s...", nameof User)
+
+            let! usersFifa2018 = helperFifa2018.ReadUsersAsync()
+            let! usersRwc2019 = helperRwc2019.ReadUsersAsync()
+            let! usersEuro2021 = helperEuro2020.ReadUsersAsync()
+            let! usersFifa2022 = helperFifa2022.ReadUsersAsync()
+            let! usersRwc2023 = helperRwc2023.ReadUsersAsync()
+            let! usersEuro2024 = helperEuro2024.ReadUsersAsync()
+
+            let userLists =
+                [
+                    usersFifa2018
+                    usersRwc2019
+                    usersEuro2021
+                    usersFifa2022
+                    usersRwc2023
+                    usersEuro2024
+                ]
+                |> List.map mapUsers
+
+            let userMapper = UserMapper userLists
+
+            logger.Debug "...migrating partitions..."
+
+            let! _ = helperFifa2018.MigrateAsync(userMapper.MapperFor(sourceUserMap usersFifa2018))
+            let! _ = helperRwc2019.MigrateAsync(userMapper.MapperFor(sourceUserMap usersRwc2019))
+            let! _ = helperEuro2020.MigrateAsync(userMapper.MapperFor(sourceUserMap usersEuro2021))
+            let! _ = helperFifa2022.MigrateAsync(userMapper.MapperFor(sourceUserMap usersFifa2022))
+            let! _ = helperRwc2023.MigrateAsync(userMapper.MapperFor(sourceUserMap usersRwc2023))
+            let! _ = helperEuro2024.MigrateAsync(userMapper.MapperFor(sourceUserMap usersEuro2024))
+
+            logger.Debug("...writing {User}s...", nameof User)
+            let! _ = writeUsersAsync (userMapper.Users())
+
+            logger.Debug("...writing {Sweepstake}s...", nameof Sweepstake)
+            let! _ = writeSweepstakesAsync [ fifa2018; rwc2019; euro2020; fifa2022; rwc2023; euro2024 ]
+
+            logger.Debug "...completed migration"
+
+            return! Ok()
+        else
             logger.Debug "Not configured to migrate on startup"
             return! Ok()
-
-        let! _ = // error if value for root not configured
-            if not isConfiguredRoot then
-                Error "Configured to migrate on startup but value for {rootKey} configuration setting is missing"
-            else
-                Ok()
-
-        logger.Debug "Starting migration..."
-
-        logger.Debug("...checking {User}s...", nameof User)
-        let reader = persistenceFactory.GetReader<User, UserEvent> None
-        let! all = reader.ReadAllAsync()
-
-        let! _ = // error if Users already exist
-            if all.Length = 0 then
-                logger.Debug("...can migrate as {User}s do not already exist", nameof User)
-                Ok()
-            else
-                logger.Error("...cannot migrate as {User}s already exist", nameof User)
-                Error $"Cannot migrate as {nameof User}s already exist"
-
-        logger.Debug("...checking {Sweepstake}s...", nameof Sweepstake)
-        let reader = persistenceFactory.GetReader<Sweepstake, SweepstakeEvent> None
-        let! all = reader.ReadAllAsync()
-
-        let! _ = // error if Sweepstakes already exist
-            if all.Length = 0 then
-                logger.Debug("...can migrate as {Sweepstake}s do not already exist", nameof Sweepstake)
-                Ok()
-            else
-                logger.Error("...cannot migrate as {Sweepstake}s already exist", nameof Sweepstake)
-                Error $"Cannot migrate as {nameof Sweepstake}s already exist"
-
-        let fifa2018 = {
-            SweepstakeCommon = {
-                SweepstakeType = Fifa
-                Year = 2018u
-                Description = "The world-famous World Cup 2018 sweepstake"
-                Logo =
-                    "https://github.com/aornota/sweepstake-2018/blob/master/src/resources/images/sweepstake-2018-24x24.png"
-                MaxPlayersPerSquad = 23u
-                Status = Archived
-            }
-        }
-
-        let rwc2019 = {
-            SweepstakeCommon = {
-                SweepstakeType = Rwc
-                Year = 2019u
-                Description = "The world-famous Rugby World Cup 2019 sweepstake"
-                Logo = "https://github.com/aornota/sweepstake-2019/blob/master/src/ui/public/sweepstake-2019-24x24.png"
-                MaxPlayersPerSquad = 31u
-                Status = Archived
-            }
-        }
-
-        let euro2020 = {
-            SweepstakeCommon = {
-                SweepstakeType = Euro
-                Year = 2020u
-                Description = "The world-famous Euro 2020 sweepstake"
-                Logo = "https://github.com/aornota/sweepstake-2021/blob/master/src/ui/public/sweepstake-2021-24x24.png"
-                MaxPlayersPerSquad = 26u
-                Status = Archived
-            }
-        }
-
-        let fifa2022 = {
-            SweepstakeCommon = {
-                SweepstakeType = Fifa
-                Year = 2022u
-                Description = "The world-famous World Cup 2022 sweepstake"
-                Logo = "https://github.com/aornota/sweepstake-2022/blob/main/src/ui/public/sweepstake-2022-24x24.png"
-                MaxPlayersPerSquad = 26u
-                Status = Archived
-            }
-        }
-
-        let rwc2023 = {
-            SweepstakeCommon = {
-                SweepstakeType = Rwc
-                Year = 2023u
-                Description = "The world-famous Rugby World Cup 2023 sweepstake"
-                Logo = "https://github.com/aornota/sweepstake-2023/blob/main/src/ui/public/sweepstake-2023-24x24.png"
-                MaxPlayersPerSquad = 33u
-                Status = Archived
-            }
-        }
-
-        let euro2024 = {
-            SweepstakeCommon = {
-                SweepstakeType = Euro
-                Year = 2024u
-                Description = "The world-famous Euro 2024 sweepstake"
-                Logo = "https://github.com/aornota/sweepstake-2024/blob/main/src/ui/public/sweepstake-2024-24x24.png"
-                MaxPlayersPerSquad = 26u
-                Status = Archived
-            }
-        }
-
-        logger.Debug "...checking partitions..."
-
-        let helperFifa2018 =
-            PartitionHelper<
-                GroupAToH,
-                StageFifa,
-                Unconfirmed<StageFifa, GroupAToH>,
-                PlayerTypeFootball,
-                MatchEventFootball,
-                UnconfirmedFifa',
-                MatchEventFootball'
-             >(
-                root,
-                fifa2018.SweepstakeCommon.PartitionName,
-                Partition.fifa2018,
-                mapFixtureFifa,
-                mapSquadFifa,
-                persistenceFactory,
-                logger
-            )
-
-        let helperRwc2019 =
-            PartitionHelper<
-                GroupAToD,
-                StageRwc,
-                Unconfirmed<StageRwc, GroupAToD>,
-                PlayerTypeRugby,
-                MatchEventRugby,
-                UnconfirmedRwc',
-                MatchEventRugby'
-             >(
-                root,
-                rwc2019.SweepstakeCommon.PartitionName,
-                Partition.rwc2019,
-                mapFixtureRwc,
-                mapSquadRwc,
-                persistenceFactory,
-                logger
-            )
-
-        let helperEuro2020 =
-            PartitionHelper<
-                GroupAToF,
-                StageEuro,
-                UnconfirmedEuro,
-                PlayerTypeFootball,
-                MatchEventFootball,
-                UnconfirmedEuro',
-                MatchEventFootball'
-             >(
-                root,
-                euro2020.SweepstakeCommon.PartitionName,
-                Partition.euro2020,
-                mapFixtureEuro,
-                mapSquadEuro,
-                persistenceFactory,
-                logger
-            )
-
-        let helperFifa2022 =
-            PartitionHelper<
-                GroupAToH,
-                StageFifa,
-                Unconfirmed<StageFifa, GroupAToH>,
-                PlayerTypeFootball,
-                MatchEventFootball,
-                UnconfirmedFifaV2',
-                MatchEventFootball'
-             >(
-                root,
-                fifa2022.SweepstakeCommon.PartitionName,
-                Partition.fifa2022,
-                mapFixtureFifaV2,
-                mapSquadFifa,
-                persistenceFactory,
-                logger
-            )
-
-        let helperRwc2023 =
-            PartitionHelper<
-                GroupAToD,
-                StageRwc,
-                Unconfirmed<StageRwc, GroupAToD>,
-                PlayerTypeRugby,
-                MatchEventRugby,
-                UnconfirmedRwc',
-                MatchEventRugby'
-             >(
-                root,
-                rwc2023.SweepstakeCommon.PartitionName,
-                Partition.rwc2023,
-                mapFixtureRwc,
-                mapSquadRwc,
-                persistenceFactory,
-                logger
-            )
-
-        let helperEuro2024 =
-            PartitionHelper<
-                GroupAToF,
-                StageEuro,
-                UnconfirmedEuro,
-                PlayerTypeFootball,
-                MatchEventFootball,
-                UnconfirmedEuro',
-                MatchEventFootball'
-             >(
-                root,
-                euro2024.SweepstakeCommon.PartitionName,
-                Partition.euro2024,
-                mapFixtureEuro,
-                mapSquadEuro,
-                persistenceFactory,
-                logger
-            )
-
-        let! _ = helperFifa2018.CheckAllAsync()
-        let! _ = helperRwc2019.CheckAllAsync()
-        let! _ = helperEuro2020.CheckAllAsync()
-        let! _ = helperFifa2022.CheckAllAsync()
-        let! _ = helperRwc2023.CheckAllAsync()
-        let! _ = helperEuro2024.CheckAllAsync()
-
-        logger.Debug("...mapping {User}s...", nameof User)
-
-        let! usersFifa2018 = helperFifa2018.ReadUsersAsync()
-        let! usersRwc2019 = helperRwc2019.ReadUsersAsync()
-        let! usersEuro2021 = helperEuro2020.ReadUsersAsync()
-        let! usersFifa2022 = helperFifa2022.ReadUsersAsync()
-        let! usersRwc2023 = helperRwc2023.ReadUsersAsync()
-        let! usersEuro2024 = helperEuro2024.ReadUsersAsync()
-
-        let userLists =
-            [
-                usersFifa2018
-                usersRwc2019
-                usersEuro2021
-                usersFifa2022
-                usersRwc2023
-                usersEuro2024
-            ]
-            |> List.map mapUsers
-
-        let userMapper = UserMapper userLists
-
-        logger.Debug "...migrating partitions..."
-
-        let! _ = helperFifa2018.MigrateAsync(userMapper.MapperFor(sourceUserMap usersFifa2018))
-        let! _ = helperRwc2019.MigrateAsync(userMapper.MapperFor(sourceUserMap usersRwc2019))
-        let! _ = helperEuro2020.MigrateAsync(userMapper.MapperFor(sourceUserMap usersEuro2021))
-        let! _ = helperFifa2022.MigrateAsync(userMapper.MapperFor(sourceUserMap usersFifa2022))
-        let! _ = helperRwc2023.MigrateAsync(userMapper.MapperFor(sourceUserMap usersRwc2023))
-        let! _ = helperEuro2024.MigrateAsync(userMapper.MapperFor(sourceUserMap usersEuro2024))
-
-        logger.Debug("...writing {User}s...", nameof User)
-        let! _ = writeUsersAsync (userMapper.Users())
-
-        logger.Debug("...writing {Sweepstake}s...", nameof Sweepstake)
-        let! _ = writeSweepstakesAsync [ fifa2018; rwc2019; euro2020; fifa2022; rwc2023; euro2024 ]
-
-        logger.Debug "...completed migration"
-
-        return! Ok()
     }

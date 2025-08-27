@@ -94,7 +94,9 @@ type Startup(config) =
         |> Async.RunSynchronously
         |> ignore<Result<unit, string>>
 
-    // TODO-STARTUP...do Startup.checkUsersAsync (persistenceFactory, System(nameof Startup), logger) |> Async.RunSynchronously
+    do // check Users
+        Startup.checkUsersAsync (persistenceFactory, System(nameof Startup), logger)
+        |> Async.RunSynchronously
 
     let todosApi ctx = {
         Shared.getTodos = fun () -> async { return Storage.todos |> List.ofSeq }

@@ -11,6 +11,10 @@ open System.Collections.Concurrent
 open System.IO
 open Thoth.Json.Net
 
+(* TODO-PERSISTENCE:
+    -- Write tests for PersistenceModule functions: getEventsFileName | getSnapshotFileName | tryDecodeEventsFileAsync | tryDecodeSnapshotFileAsync | getDirStatusAsync...
+    -- Write tests for FileReaderAndWriter (via FilePersistenceFactory): ReadAllAsync | CreateFromSnapshotAsync | WriteEventAsync... *)
+
 // Note that EventsFile, EventLine, Snapshot[File|Line], DirStatus, and FilePersistence module are not private in order to facilitate unit testing.
 
 type EventsFile = {
