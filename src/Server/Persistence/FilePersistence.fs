@@ -51,7 +51,21 @@ module FilePersistence =
     let private decodeSnapshotLine (Json json) =
         Decode.fromString snapshotLineDecoder json
 
-    let tryDecodeEventsFileAsync (path: string, eventsFile: EventsFile) = asyncResult {
+    let getEventsFileName (Rvn firstRvn, Rvn lastRvn) =
+        match firstRvn, lastRvn with
+        | 0u, _ -> Error $"First {nameof Rvn} for name of events file must not be {Rvn 0u}"
+        | _, 0u -> Error $"Last {nameof Rvn} for name of events file must not be {Rvn 0u}"
+        | fromRvn, toRvn when fromRvn > toRvn ->
+            Error
+                $"First {nameof Rvn} ({Rvn firstRvn}) must not be greater than last {nameof Rvn} ({Rvn lastRvn}) for name of events file"
+        | _ -> Ok $"{firstRvn}-{lastRvn}.{eventsFileExtension}"
+
+    let getSnapshotFileName (Rvn rvn) =
+        match rvn with
+        | 0u -> Error $"{nameof Rvn} for name of snapshot file must not be {Rvn 0u}"
+        | _ -> Ok $"{rvn}.{snapshotFileExtension}"
+
+    let tryDecodeEventsFileAsync (dir: DirectoryInfo, guid: Guid) (eventsFile: EventsFile) = asyncResult {
         let rec checkEventLines expectedFirstRvn expectedLastRvn previousRvn eventLines =
             match eventLines, previousRvn with
             | EventLine(rvn, _, _, _) :: t, None ->
@@ -66,7 +80,7 @@ module FilePersistence =
                 else
                     Error
                         $"Events file {eventsFile.EventsFileName} has decoded {nameof EventLine} with {rvn} not contiguous with previous decoded {nameof EventLine} ({previousRvn})"
-            | [], None -> Error $"Events file {eventsFile.EventsFileName} has no decoded {nameof EventLine}s" // should never happen as logic below ensures that eventLines is not empty on the first call
+            | [], None -> Error $"Events file {eventsFile.EventsFileName} has no decoded {nameof EventLine}s" // should never happen as logic in calling code below ensures that eventLines is not empty on the first call
             | [], Some previousRvn ->
                 if previousRvn = expectedLastRvn then
                     Ok()
@@ -75,6 +89,7 @@ module FilePersistence =
                         $"Expected last {expectedLastRvn} for events file {eventsFile.EventsFileName} but decoded last {nameof EventLine} is {previousRvn}"
 
         try
+            let path = Path.Combine(dir.FullName, guid.ToString())
             let! lines = File.ReadAllLinesAsync(Path.Combine(path, eventsFile.EventsFileName))
 
             match lines |> List.ofArray with
@@ -86,7 +101,8 @@ module FilePersistence =
                     |> List.sequenceResultA
                 with
                 | Ok eventLines ->
-                    let! _ = checkEventLines eventsFile.FirstRvn eventsFile.LastRvn None eventLines
+                    let! _ = // error if event lines are invalid
+                        checkEventLines eventsFile.FirstRvn eventsFile.LastRvn None eventLines
 
                     return!
                         Ok(
@@ -100,8 +116,9 @@ module FilePersistence =
             return! Error $"Exception when decoding events file {eventsFile.EventsFileName}: {exn.Message}"
     }
 
-    let tryDecodeSnapshotFileAsync (path: string, snapshotFile: SnapshotFile) = asyncResult {
+    let tryDecodeSnapshotFileAsync (dir: DirectoryInfo, guid: Guid) (snapshotFile: SnapshotFile) = asyncResult {
         try
+            let path = Path.Combine(dir.FullName, guid.ToString())
             let! lines = File.ReadAllLinesAsync(Path.Combine(path, snapshotFile.SnapshotFileName))
 
             match lines |> List.ofArray with
@@ -119,20 +136,6 @@ module FilePersistence =
         with exn ->
             return! Error $"Exception when decoding snapshot file {snapshotFile.SnapshotFileName}: {exn.Message}"
     }
-
-    let getEventsFileName (Rvn firstRvn, Rvn lastRvn) =
-        match firstRvn, lastRvn with
-        | 0u, _ -> Error $"First {nameof Rvn} for name of events file must not be {Rvn 0u}"
-        | _, 0u -> Error $"Last {nameof Rvn} for name of events file must not be {Rvn 0u}"
-        | fromRvn, toRvn when fromRvn > toRvn ->
-            Error
-                $"First {nameof Rvn} ({Rvn firstRvn}) must not be greater than last {nameof Rvn} ({Rvn lastRvn}) for name of events file"
-        | _ -> Ok $"{firstRvn}-{lastRvn}.{eventsFileExtension}"
-
-    let getSnapshotFileName (Rvn rvn) =
-        match rvn with
-        | 0u -> Error $"{nameof Rvn} for name of snapshot file must not be {Rvn 0u}"
-        | _ -> Ok $"{rvn}.{snapshotFileExtension}"
 
     let getDirStatusAsync (dir: DirectoryInfo, guid: Guid, strictMode) = asyncResult {
         let parseEventsFileName (fileName: string) =
@@ -174,6 +177,50 @@ module FilePersistence =
         let path = Path.Combine(dir.FullName, guid.ToString())
         let pathForError = $@"...\{dir.Name}\{guid}"
 
+        let checkFiles (eventsFiles: EventsFile list) (snapshotFiles: SnapshotFile list) =
+            let getEventsFileName (Rvn firstRvn, Rvn lastRvn) =
+                $"{firstRvn}-{lastRvn}.{eventsFileExtension}"
+
+            let getSnapshotFileName (Rvn rvn) = $"{rvn}.{snapshotFileExtension}"
+
+            let rec check (previous: Rvn * Rvn * bool) (files: (Rvn * Rvn * bool) list) =
+                match files with
+                | (firstRvn, lastRvn, isSnapshot) :: t ->
+                    let previousFirstRvn, previousLastRvn, previousIsSnapshot = previous
+
+                    if isSnapshot && previousIsSnapshot then
+                        Error
+                            $"Snaphot file {getSnapshotFileName firstRvn} follows snapshot file {getSnapshotFileName previousFirstRvn} in {pathForError}"
+                    else if not isSnapshot && not previousIsSnapshot then
+                        Error
+                            $"Events file {getEventsFileName (firstRvn, lastRvn)} follows events file {getEventsFileName (previousFirstRvn, previousLastRvn)} in {pathForError}"
+                    else if isSnapshot && firstRvn <> previousLastRvn then
+                        Error
+                            $"{nameof Rvn} ({firstRvn}) for snapshot file {getSnapshotFileName firstRvn} is not the same as last {nameof Rvn} ({previousLastRvn}) for previous events file {getEventsFileName (previousFirstRvn, previousLastRvn)} in {pathForError}"
+                    else if not isSnapshot && firstRvn <> previousLastRvn.NextRvn then
+                        Error
+                            $"First {nameof Rvn} ({firstRvn}) for events file {getEventsFileName (firstRvn, lastRvn)} is not contiguous with {nameof Rvn} ({previousLastRvn}) for previous snapshot file {getSnapshotFileName previousFirstRvn} in {pathForError}"
+                    else
+                        check (firstRvn, lastRvn, isSnapshot) t
+                | [] -> Ok()
+
+            let eventsFiles =
+                eventsFiles
+                |> List.map (fun eventsFile -> eventsFile.FirstRvn, eventsFile.LastRvn, false)
+
+            let snapshotFiles =
+                snapshotFiles
+                |> List.map (fun snapshotFile -> snapshotFile.Rvn, snapshotFile.Rvn, true)
+
+            let allFiles = eventsFiles @ snapshotFiles |> List.sort
+
+            match allFiles with
+            | (firstRvn, lastRvn, false) :: _ when firstRvn <> Rvn.InitialRvn ->
+                Error
+                    $"First {nameof Rvn} ({firstRvn}) is not {Rvn.InitialRvn} for first events file {getEventsFileName (firstRvn, lastRvn)} (and no previous snapshot file) in {pathForError}"
+            | (firstRvn, lastRvn, isSnapshot) :: t -> check (firstRvn, lastRvn, isSnapshot) t
+            | [] -> Error $"No events files or snapshot files in {pathForError}" // should never happen as logic in calling code below ensures that eventFiles and snapshotFiles cannot both be empty
+
         if Directory.Exists path then
             let allFileNames =
                 (DirectoryInfo path).GetFiles() |> Array.map _.Name |> Set.ofArray
@@ -188,7 +235,7 @@ module FilePersistence =
                 |> Array.map _.Name
                 |> Set.ofArray
 
-            let! _ =
+            let! _ = // error if any files with invalid extensions
                 let invalidExtensionFileNames =
                     eventsFileNames
                     |> Set.difference (snapshotFileNames |> Set.difference allFileNames)
@@ -203,43 +250,80 @@ module FilePersistence =
                 match
                     eventsFileNames
                     |> List.ofSeq
-                    |> List.sort
                     |> List.map parseEventsFileName
                     |> List.sequenceResultA
                 with
-                | Ok eventsFiles -> Ok eventsFiles
+                | Ok eventsFiles ->
+                    Ok(
+                        eventsFiles
+                        |> List.sortBy (fun eventFile -> eventFile.FirstRvn, eventFile.LastRvn)
+                    )
                 | Error errors -> Error $"There are events file/s with invalid names in {pathForError}: {errors}"
 
             let! snapshotFiles =
                 match
                     snapshotFileNames
                     |> List.ofSeq
-                    |> List.sort
                     |> List.map parseSnapshotFileName
                     |> List.sequenceResultA
                 with
-                | Ok snapshotFiles -> Ok snapshotFiles
+                | Ok snapshotFiles -> Ok(snapshotFiles |> List.sortBy _.Rvn)
                 | Error errors -> Error $"There are snapshot file/s with invalid names in {pathForError}: {errors}"
 
-            // TODO-PERSISTENCE: If strictMode, call tryDecode[Events|Snapshot]FileAsync for all [events|snapshot]Files...
+            let! decodeEventsFilesResults = async {
+                if strictMode then
+                    return!
+                        eventsFiles
+                        |> List.map (tryDecodeEventsFileAsync (DirectoryInfo path, guid))
+                        |> Async.Parallel
+                else
+                    return Array.empty
+            }
 
-            return!
+            let! _ = // error if any errors for events files
+                decodeEventsFilesResults
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors ->
+                    $"One or more strict mode error for events files in {pathForError}: {errors}")
+
+            let! decodeSnapshotFilesResults = async {
+                if strictMode then
+                    return!
+                        snapshotFiles
+                        |> List.map (tryDecodeSnapshotFileAsync (DirectoryInfo path, guid))
+                        |> Async.Parallel
+                else
+                    return Array.empty
+            }
+
+            let! _ = // error if any errors for snapshot files
+                decodeSnapshotFilesResults
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors ->
+                    $"One or more strict mode error for snapshot files in {pathForError}: {errors}")
+
+            let! result = result {
                 match eventsFiles, snapshotFiles with
-                | [], [] -> Ok Empty
-                | [ eventsFile ], [] when eventsFile.FirstRvn = Rvn.InitialRvn -> Ok(EventsOnly eventsFile)
+                | [], [] -> return! Ok Empty
+                | [ eventsFile ], [] when eventsFile.FirstRvn = Rvn.InitialRvn -> return! Ok(EventsOnly eventsFile)
                 | [ eventsFile ], [] ->
-                    Error
-                        $"First {nameof Rvn} ({eventsFile.FirstRvn}) is not {Rvn.InitialRvn} for only events file in {pathForError}: {eventsFileNames}"
+                    return!
+                        Error
+                            $"First {nameof Rvn} ({eventsFile.FirstRvn}) is not {Rvn.InitialRvn} for only events file in {pathForError}: {eventsFileNames}"
                 | _, [] ->
-                    Error $"There are multiple events files and no snapshot files in {pathForError}: {eventsFileNames}"
-                | [], [ snapshotFile ] -> Ok(SnapshotOnly snapshotFile) // note: only snapshot file does not have to be Rvn.InitialRvn
+                    return!
+                        Error
+                            $"There are multiple events files and no snapshot files in {pathForError}: {eventsFileNames}"
+                | [], [ snapshotFile ] -> return! Ok(SnapshotOnly snapshotFile) // note: only snapshot file does not have to be Rvn.InitialRvn
                 | [], _ ->
-                    Error
-                        $"There are multiple snapshot files and no events files in {pathForError}: {snapshotFileNames}"
+                    return!
+                        Error
+                            $"There are multiple snapshot files and no events files in {pathForError}: {snapshotFileNames}"
                 | _ ->
-                    (* TODO-PERSISTENCE: Check consistency of events and snapshot files (irrespective of strictMode)...
-                        -- First events file must be from Rvn.InitialRvn (unless follows snapshot file)...
-                        -- Events and snapshot files must be contiguous... *)
+                    let! _ = // error if any errors for [events|snapshot] files
+                        checkFiles eventsFiles snapshotFiles
 
                     let lastSnapshotFile = (snapshotFiles |> List.rev).Head // safe to use Head as empty list will always have been matched above
 
@@ -247,8 +331,11 @@ module FilePersistence =
                         eventsFiles
                         |> List.tryFind (fun eventsFile -> eventsFile.FirstRvn = lastSnapshotFile.Rvn.NextRvn)
                     with
-                    | Some subsequentEventsFile -> Ok(SnapshotAndEvents(lastSnapshotFile, subsequentEventsFile))
-                    | None -> Ok(SnapshotOnly lastSnapshotFile)
+                    | Some subsequentEventsFile -> return! Ok(SnapshotAndEvents(lastSnapshotFile, subsequentEventsFile))
+                    | None -> return! Ok(SnapshotOnly lastSnapshotFile)
+            }
+
+            return result
         else
             return! Ok DoesNotExist
     }
@@ -316,7 +403,7 @@ type private FileReaderAndWriter
             let! snapshotEntry = async {
                 match snapshotFile with
                 | Some snapshotFile ->
-                    let! result = FilePersistence.tryDecodeSnapshotFileAsync (path, snapshotFile)
+                    let! result = FilePersistence.tryDecodeSnapshotFileAsync (DirectoryInfo path, guid) snapshotFile
 
                     match result with
                     | Ok snapshotEntry -> return Ok(Some snapshotEntry)
@@ -327,7 +414,7 @@ type private FileReaderAndWriter
             let! eventEntries = async {
                 match eventsFile with
                 | Some eventsFile ->
-                    let! result = FilePersistence.tryDecodeEventsFileAsync (path, eventsFile)
+                    let! result = FilePersistence.tryDecodeEventsFileAsync (DirectoryInfo path, guid) eventsFile
 
                     match result with
                     | Ok eventEntries -> return Ok eventEntries
@@ -445,7 +532,7 @@ type private FileReaderAndWriter
                     if rvn = eventsFile.LastRvn.NextRvn then
                         if strictMode then
                             // This will (among other checks) verify that the last EventLine in the file is actually eventsFile.LastRvn.
-                            let! result = FilePersistence.tryDecodeEventsFileAsync (path, eventsFile)
+                            let! result = FilePersistence.tryDecodeEventsFileAsync (DirectoryInfo path, guid) eventsFile
 
                             match result with
                             | Ok _ -> return Ok(Some eventsFile)
@@ -462,7 +549,8 @@ type private FileReaderAndWriter
                     if rvn = snapshotFile.Rvn.NextRvn then
                         if strictMode then
                             // This will (among other checks) verify that the only SnapshotLine in the file is actually snapshotFile.Rvn.
-                            let! result = FilePersistence.tryDecodeSnapshotFileAsync (path, snapshotFile)
+                            let! result =
+                                FilePersistence.tryDecodeSnapshotFileAsync (DirectoryInfo path, guid) snapshotFile
 
                             match result with
                             | Ok _ -> return Ok None
