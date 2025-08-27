@@ -272,10 +272,7 @@ module FilePersistence =
 
             let! decodeEventsFilesResults = async {
                 if strictMode then
-                    return!
-                        eventsFiles
-                        |> List.map (tryDecodeEventsFileAsync (DirectoryInfo path, guid))
-                        |> Async.Parallel
+                    return! eventsFiles |> List.map (tryDecodeEventsFileAsync (dir, guid)) |> Async.Parallel
                 else
                     return Array.empty
             }
@@ -291,7 +288,7 @@ module FilePersistence =
                 if strictMode then
                     return!
                         snapshotFiles
-                        |> List.map (tryDecodeSnapshotFileAsync (DirectoryInfo path, guid))
+                        |> List.map (tryDecodeSnapshotFileAsync (dir, guid))
                         |> Async.Parallel
                 else
                     return Array.empty
@@ -382,7 +379,7 @@ type private FileReaderAndWriter
 
     let pathForError = $@"...\{DirectoryInfo(root).Name}\{subPath}"
 
-    let tryReadAsync (guid: Guid) : Async<Result<NonEmptyList<Entry>, string>> = asyncResult {
+    let tryReadAsync (guid: Guid) = asyncResult {
         try
             let! dirStatus = async {
                 let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid, strictMode) // use strictMode here when reading
@@ -451,7 +448,7 @@ type private FileReaderAndWriter
             let! guids =
                 match
                     dirAndGuids
-                    |> List.choose (fun (dir, guid) -> if guid.IsNone then Some(dir.Name) else None)
+                    |> List.choose (fun (dir, guid) -> if guid.IsNone then Some dir.Name else None)
                 with
                 | [] -> Ok(dirAndGuids |> List.choose snd)
                 | dirNames ->

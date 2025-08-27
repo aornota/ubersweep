@@ -13,9 +13,9 @@ module Json =
     [<Literal>]
     let spaceCount = 0 // note: need compact serialization because persistence requires that each serialized event is a single line
 
-    let caseStrategy = CamelCase
+    let caseStrategy = PascalCase
 
-    let extraCoders = // note: needed to handle unit (for some reason)
+    let extraCoders = // note: needed to handle Decimal - and (for some reason) unit
         Extra.empty
         |> Extra.withDecimal
         |> Extra.withCustom (fun _ -> Encode.nil) (fun _ _ -> Ok())

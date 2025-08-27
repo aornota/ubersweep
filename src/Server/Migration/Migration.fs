@@ -1,7 +1,5 @@
 namespace Aornota.Ubersweep.Server.Migration
 
-// TODO-MIGRATION: Change use of Result (and in Migration project) so that Error case is always string (rather than string list)?...
-
 open Aornota.Ubersweep.Migration
 open Aornota.Ubersweep.Migration.Domain
 open Aornota.Ubersweep.Migration.Events
@@ -61,7 +59,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
 
     let partition = getPartition (Path.Combine(root, partitionName), logger)
 
-    member private _.Check<'state, 'event when 'state :> IState<'state, 'event>>() = asyncResult {
+    member private _.CheckAsync<'state, 'event when 'state :> IState<'state, 'event>>() = asyncResult {
         logger.Debug("...checking {type}s for {partitionName}...", sanitize typeof<'event>, partitionName)
         let reader = persistenceFactory.GetReader<'state, 'event>(Some partitionName)
 
@@ -83,28 +81,28 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                     partitionName
                 )
 
-                Error String.Empty
+                Error $"Cannot migrate as {sanitize typeof<'event>}s exist for {partitionName}"
     }
 
-    member this.CheckAll() = asyncResult {
+    member this.CheckAllAsync() = asyncResult {
         logger.Debug("Checking {partitionName}...", partitionName)
 
-        let! _ = this.Check<Draft, DraftEvent>()
-        let! _ = this.Check<Fixture<'stage, 'unconfirmed, 'matchEvent>, FixtureEvent<'matchEvent>>()
-        let! _ = this.Check<Post, PostEvent>()
-        let! _ = this.Check<Squad<'group, 'playerType>, SquadEvent<'playerType>>()
-        let! _ = this.Check<UserDraft, UserDraftEvent>()
+        let! _ = this.CheckAsync<Draft, DraftEvent>()
+        let! _ = this.CheckAsync<Fixture<'stage, 'unconfirmed, 'matchEvent>, FixtureEvent<'matchEvent>>()
+        let! _ = this.CheckAsync<Post, PostEvent>()
+        let! _ = this.CheckAsync<Squad<'group, 'playerType>, SquadEvent<'playerType>>()
+        let! _ = this.CheckAsync<UserDraft, UserDraftEvent>()
 
-        return ()
+        return! Ok()
     }
 
-    member _.ReadUsers() = partition.ReadUsers()
+    member _.ReadUsersAsync() = partition.ReadUsersAsync()
 
     member _.MigrateAsync(mapUserId: MapUserId) = asyncResult {
         logger.Debug("Migrating {partitionName}...", partitionName)
 
         logger.Debug("...migrating {Draft}s for {partitionName}...", nameof Draft, partitionName)
-        let! drafts = partition.ReadDrafts()
+        let! drafts = partition.ReadDraftsAsync()
         let writer = persistenceFactory.GetWriter<Draft, DraftEvent>(Some partitionName)
 
         let! writeDraftsResults =
@@ -117,23 +115,28 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 ))
             |> Async.Parallel
 
-        let! _ =
-            match writeDraftsResults |> List.ofArray |> List.sequenceResultA with
+        let! _ = // combine Draft results and log
+            match
+                writeDraftsResults
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors -> $"One or more error when writing {nameof Draft}s: {errors}")
+            with
             | Ok _ ->
                 logger.Debug("...migrated {Draft}s for {partitionName}", nameof Draft, partitionName)
                 Ok()
-            | Error errors ->
+            | Error error ->
                 logger.Error(
-                    "...errors migrating {Draft}s for {partitionName}: {errors}",
+                    "...error when migrating {Draft}s for {partitionName}: {error}",
                     nameof Draft,
                     partitionName,
-                    errors
+                    error
                 )
 
-                Error errors
+                Error $"Error when migrating {nameof Draft}s for {partitionName}: {error}"
 
         logger.Debug("...migrating {Fixture}s for {partitionName}...", nameof Fixture, partitionName)
-        let! fixtures = partition.ReadFixtures()
+        let! fixtures = partition.ReadFixturesAsync()
 
         let writer =
             persistenceFactory.GetWriter<
@@ -155,23 +158,28 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 ))
             |> Async.Parallel
 
-        let! _ =
-            match writeFixturesResults |> List.ofArray |> List.sequenceResultA with
+        let! _ = // combine Fixture results and log
+            match
+                writeFixturesResults
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors -> $"One or more error when writing {nameof Fixture}s: {errors}")
+            with
             | Ok _ ->
                 logger.Debug("...migrated {Fixture}s for {partitionName}", nameof Fixture, partitionName)
                 Ok()
-            | Error errors ->
+            | Error error ->
                 logger.Error(
-                    "...errors migrating {Fixture}s for {partitionName}: {errors}",
+                    "...error when migrating {Fixture}s for {partitionName}: {error}",
                     nameof Fixture,
                     partitionName,
-                    errors
+                    error
                 )
 
-                Error errors
+                Error $"Error when migrating {nameof Fixture}s for {partitionName}: {error}"
 
         logger.Debug("...migrating {Post}s for {partitionName}...", nameof Post, partitionName)
-        let! posts = partition.ReadPosts()
+        let! posts = partition.ReadPostsAsync()
         let writer = persistenceFactory.GetWriter<Post, PostEvent>(Some partitionName)
 
         let! writePostsResults =
@@ -184,23 +192,28 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 ))
             |> Async.Parallel
 
-        let! _ =
-            match writePostsResults |> List.ofArray |> List.sequenceResultA with
+        let! _ = // combine Post results and log
+            match
+                writePostsResults
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors -> $"One or more error when writing {nameof Post}s: {errors}")
+            with
             | Ok _ ->
-                logger.Debug("...migrated {Post}s for {partitionName}", nameof Post, partitionName)
+                logger.Debug("...migrated {DrPostaft}s for {partitionName}", nameof Post, partitionName)
                 Ok()
-            | Error errors ->
+            | Error error ->
                 logger.Error(
-                    "...errors migrating {Post}s for {partitionName}: {errors}",
+                    "...error when migrating {Post}s for {partitionName}: {error}",
                     nameof Post,
                     partitionName,
-                    errors
+                    error
                 )
 
-                Error errors
+                Error $"Error when migrating {nameof Post}s for {partitionName}: {error}"
 
         logger.Debug("...migrating {Squad}s for {partitionName}...", nameof Squad, partitionName)
-        let! squads = partition.ReadSquads()
+        let! squads = partition.ReadSquadsAsync()
 
         let writer =
             persistenceFactory.GetWriter<Squad<'group, 'playerType>, SquadEvent<'playerType>>(Some partitionName)
@@ -216,23 +229,28 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 ))
             |> Async.Parallel
 
-        let! _ =
-            match writeSquadsResults |> List.ofArray |> List.sequenceResultA with
+        let! _ = // combine Squad results and log
+            match
+                writeSquadsResults
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors -> $"One or more error when writing {nameof Squad}s: {errors}")
+            with
             | Ok _ ->
                 logger.Debug("...migrated {Squad}s for {partitionName}", nameof Squad, partitionName)
                 Ok()
-            | Error errors ->
+            | Error error ->
                 logger.Error(
-                    "...errors migrating {Squad}s for {partitionName}: {errors}",
+                    "...error when migrating {Squad}s for {partitionName}: {error}",
                     nameof Squad,
                     partitionName,
-                    errors
+                    error
                 )
 
-                Error errors
+                Error $"Error when migrating {nameof Squad}s for {partitionName}: {error}"
 
         logger.Debug("...migrating {UserDraft}s for {partitionName}...", nameof UserDraft, partitionName)
-        let! userDrafts = partition.ReadUserDrafts()
+        let! userDrafts = partition.ReadUserDraftsAsync()
 
         let writer =
             persistenceFactory.GetWriter<UserDraft, UserDraftEvent>(Some partitionName)
@@ -248,22 +266,27 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
                 ))
             |> Async.Parallel
 
-        let! _ =
-            match writeUserDraftsResults |> List.ofArray |> List.sequenceResultA with
+        let! _ = // combine UserDraft results and log
+            match
+                writeUserDraftsResults
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors -> $"One or more error when writing {nameof UserDraft}s: {errors}")
+            with
             | Ok _ ->
                 logger.Debug("...migrated {UserDraft}s for {partitionName}", nameof UserDraft, partitionName)
                 Ok()
-            | Error errors ->
+            | Error error ->
                 logger.Error(
-                    "...errors migrating {UserDraft}s for {partitionName}: {errors}",
-                    nameof UserDraft,
+                    "...error when migrating {UserDraft}s for {partitionName}: {error}",
+                    nameof Draft,
                     partitionName,
-                    errors
+                    error
                 )
 
-                Error errors
+                Error $"Error when migrating {nameof UserDraft}s for {partitionName}: {error}"
 
-        return ()
+        return! Ok()
     }
 
 type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, logger) =
@@ -335,8 +358,6 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             else
                 logger.Error("Value for {rootKey} configuration setting is missing", rootKey)
 
-    let canMigrate = migrateOnStartUp && isConfiguredRoot
-
     let writeUsersAsync (users: (Guid * User' * Rvn) list) = asyncResult {
         let writer = persistenceFactory.GetWriter<User, UserEvent> None
 
@@ -346,15 +367,20 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 writer.CreateFromSnapshotAsync(guid, rvn, (mapUser user :> IState<User, UserEvent>).SnapshotJson))
             |> Async.Parallel
 
-        let! _ =
-            match writeUsersResults |> List.ofArray |> List.sequenceResultA with
+        let! _ = // combine User results and log
+            match
+                writeUsersResults
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors -> $"One or more error when writing {nameof User}s: {errors}")
+            with
             | Ok _ ->
                 logger.Debug("...{User}s written", nameof User)
                 Ok()
-            | Error errors ->
-                logger.Error("...errors writing {User}s: {errors}", nameof User, errors)
+            | Error error ->
+                logger.Error("...error when writing {User}s: {error}", nameof User, error)
 
-                Error errors
+                Error $"Error when wriring {nameof User}s: {error}"
 
         return ()
     }
@@ -372,15 +398,20 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 ))
             |> Async.Parallel
 
-        let! _ =
-            match writeSweepstakesResults |> List.ofArray |> List.sequenceResultA with
+        let! _ = // combine Sweepstake results and log
+            match
+                writeSweepstakesResults
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors -> $"One or more error when writing {nameof Sweepstake}s: {errors}")
+            with
             | Ok _ ->
                 logger.Debug("...{Sweepstake}s written", nameof Sweepstake)
                 Ok()
-            | Error errors ->
-                logger.Error("...errors writing {Sweepstake}s: {errors}", nameof Sweepstake, errors)
+            | Error error ->
+                logger.Error("...error when writing {Sweepstake}s: {error}", nameof Sweepstake, error)
 
-                Error errors
+                Error $"Error when wriring {nameof Sweepstake}s: {error}"
 
         return ()
     }
@@ -394,37 +425,41 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
             |> List.map (fun (guid, _, user, _) -> UserId'.UserId guid, user.UserName)
             |> Map.ofList
 
-        let! _ =
-            if canMigrate then
-                logger.Debug "Starting migration..."
-                Ok()
+        if not migrateOnStartUp then
+            logger.Debug "Not configured to migrate on startup"
+            return! Ok()
+
+        let! _ = // error if value for root not configured
+            if not isConfiguredRoot then
+                Error "Configured to migrate on startup but value for {rootKey} configuration setting is missing"
             else
-                logger.Debug "Skipping migration"
-                Error []
+                Ok()
+
+        logger.Debug "Starting migration..."
 
         logger.Debug("...checking {User}s...", nameof User)
         let reader = persistenceFactory.GetReader<User, UserEvent> None
         let! all = reader.ReadAllAsync()
 
-        let! _ =
+        let! _ = // error if Users already exist
             if all.Length = 0 then
                 logger.Debug("...can migrate as {User}s do not already exist", nameof User)
                 Ok()
             else
                 logger.Error("...cannot migrate as {User}s already exist", nameof User)
-                Error []
+                Error $"Cannot migrate as {nameof User}s already exist"
 
         logger.Debug("...checking {Sweepstake}s...", nameof Sweepstake)
         let reader = persistenceFactory.GetReader<Sweepstake, SweepstakeEvent> None
         let! all = reader.ReadAllAsync()
 
-        let! _ =
+        let! _ = // error if Sweepstakes already exist
             if all.Length = 0 then
                 logger.Debug("...can migrate as {Sweepstake}s do not already exist", nameof Sweepstake)
                 Ok()
             else
                 logger.Error("...cannot migrate as {Sweepstake}s already exist", nameof Sweepstake)
-                Error []
+                Error $"Cannot migrate as {nameof Sweepstake}s already exist"
 
         let fifa2018 = {
             SweepstakeCommon = {
@@ -609,21 +644,21 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
                 logger
             )
 
-        let! _ = helperFifa2018.CheckAll()
-        let! _ = helperRwc2019.CheckAll()
-        let! _ = helperEuro2020.CheckAll()
-        let! _ = helperFifa2022.CheckAll()
-        let! _ = helperRwc2023.CheckAll()
-        let! _ = helperEuro2024.CheckAll()
+        let! _ = helperFifa2018.CheckAllAsync()
+        let! _ = helperRwc2019.CheckAllAsync()
+        let! _ = helperEuro2020.CheckAllAsync()
+        let! _ = helperFifa2022.CheckAllAsync()
+        let! _ = helperRwc2023.CheckAllAsync()
+        let! _ = helperEuro2024.CheckAllAsync()
 
         logger.Debug("...mapping {User}s...", nameof User)
 
-        let! usersFifa2018 = helperFifa2018.ReadUsers()
-        let! usersRwc2019 = helperRwc2019.ReadUsers()
-        let! usersEuro2021 = helperEuro2020.ReadUsers()
-        let! usersFifa2022 = helperFifa2022.ReadUsers()
-        let! usersRwc2023 = helperRwc2023.ReadUsers()
-        let! usersEuro2024 = helperEuro2024.ReadUsers()
+        let! usersFifa2018 = helperFifa2018.ReadUsersAsync()
+        let! usersRwc2019 = helperRwc2019.ReadUsersAsync()
+        let! usersEuro2021 = helperEuro2020.ReadUsersAsync()
+        let! usersFifa2022 = helperFifa2022.ReadUsersAsync()
+        let! usersRwc2023 = helperRwc2023.ReadUsersAsync()
+        let! usersEuro2024 = helperEuro2024.ReadUsersAsync()
 
         let userLists =
             [
@@ -655,5 +690,5 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
 
         logger.Debug "...completed migration"
 
-        return ()
+        return! Ok()
     }

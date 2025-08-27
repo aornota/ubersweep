@@ -7,13 +7,30 @@ open Aornota.Ubersweep.Shared.Common
 open FsToolkit.ErrorHandling
 open System
 open System.IO
+open Thoth.Json.Net
 
-type PersistedEvent = {
+type PersistedEvent = { // note: not private as this would cause decoding errors
     Rvn: Rvn
     TimestampUtc: DateTime
     EventJson: Json
     AuditUserId: UserId'
 }
+
+type private DeserializationHelper<'event>(eventDecoder: Decoder<'event>, useLegacyDeserializer) =
+    let persistedEventDecoder =
+        Decode.Auto.generateDecoderCached<PersistedEvent> (Json.caseStrategy, Json.extraCoders)
+
+    member _.DecodePersistedEvent(Json json) =
+        if useLegacyDeserializer then
+            LegacyDeserializer.fromJson<PersistedEvent> (Json json)
+        else
+            Decode.fromString persistedEventDecoder json
+
+    member _.DecodeEvent<'event>(Json json) =
+        if useLegacyDeserializer then
+            LegacyDeserializer.fromJson<'event> (Json json)
+        else
+            Decode.fromString eventDecoder json
 
 type Event<'event> = {
     Rvn: Rvn
@@ -22,14 +39,7 @@ type Event<'event> = {
     AuditUserId: UserId'
 }
 
-type private DeserializationHelper(useLegacyDeserializer) =
-    member _.FromJson<'a> json =
-        if useLegacyDeserializer then
-            LegacyDeserializer.fromJson<'a> json
-        else
-            Json.decode<'a> json
-
-type Reader<'event>(path: string, useLegacyDeserializer, logger) =
+type Reader<'event>(path: string, eventDecoder: Decoder<'event>, useLegacyDeserializer, logger) =
     [<Literal>]
     let fileExtension = "events"
 
@@ -37,131 +47,131 @@ type Reader<'event>(path: string, useLegacyDeserializer, logger) =
 
     do logger.Information("Using path: {path}", DirectoryInfo(path).FullName)
 
-    let deserializationHelper = DeserializationHelper useLegacyDeserializer
+    let deserializationHelper =
+        DeserializationHelper<'event>(eventDecoder, useLegacyDeserializer)
 
-    let tryRead (guid: Guid) =
-        let rec checkConsistency (persistedEvents: PersistedEvent list) lastRvn =
-            match persistedEvents with
-            | { Rvn = rvn } :: t ->
-                if rvn.IsValidNextRvn lastRvn then
-                    checkConsistency t (Some rvn)
+    let tryDecodeFileAsync (file: FileInfo) = asyncResult {
+        let rec checkPersistedEvents previousRvn (persistedEvents: PersistedEvent list) =
+            match persistedEvents, previousRvn with
+            | { Rvn = rvn } :: t, None ->
+                if rvn = Rvn.InitialRvn then
+                    checkPersistedEvents (Some rvn) t
+                else
+                    Error $"{nameof Rvn} of first {nameof PersistedEvent} ({rvn}) is not {Rvn.InitialRvn}"
+            | { Rvn = rvn } :: t, Some previousRvn ->
+                if rvn = previousRvn.NextRvn then
+                    checkPersistedEvents (Some rvn) t
                 else
                     Error
-                        $"{nameof PersistedEvent} with {rvn} inconsistent with previous {nameof PersistedEvent} ({lastRvn})"
-            | [] -> Ok()
+                        $"{nameof Rvn} of {nameof PersistedEvent} ({rvn}) not contiguous with previous {nameof PersistedEvent} ({previousRvn})"
+            | [], None -> Error $"File {file.Name} has no decoded {nameof PersistedEvent}s" // should never happen as logic in calling code below ensures that persistedEvents is not empty on the first call
+            | [], _ -> Ok()
 
+        try
+            let! lines = File.ReadAllLinesAsync file.FullName
+
+            match lines |> List.ofArray with
+            | [] -> return! Error $"File {file.Name} is empty"
+            | lines ->
+                match
+                    lines
+                    |> List.map (fun line -> deserializationHelper.DecodePersistedEvent(Json line))
+                    |> List.sequenceResultA
+                with
+                | Ok persistedEvents ->
+                    let! _ = // error if persisted events are invalid
+                        checkPersistedEvents None persistedEvents
+
+                    return! Ok persistedEvents
+                | Error errors -> return! Error $"One or more decoding error for file {file.Name}: {errors}"
+        with exn ->
+            return! Error $"Exception when decoding file {file.Name}: {exn.Message}"
+    }
+
+    let tryReadAsync (guid: Guid) = asyncResult {
         try
             let file = FileInfo(Path.Combine(path, $"{guid}.{fileExtension}"))
 
-            if not (File.Exists file.FullName) then
-                Error $"File does not exist when reading {guid} for {path}"
-            else
-                let lines = File.ReadAllLines file.FullName
+            let! _ = // error if file does not exist
+                if not (File.Exists file.FullName) then
+                    Error $"File does not exist when reading {guid} for {path}"
+                else
+                    Ok()
 
-                match lines |> List.ofArray with
-                | [] -> Error $"File exists but is empty when reading {guid} for {path}"
-                | lines ->
-                    let deserializationResults =
-                        lines
-                        |> List.map (fun line -> deserializationHelper.FromJson<PersistedEvent>(Json line))
+            let! persistedEvents = async {
+                let! result = tryDecodeFileAsync file
 
-                    match
-                        deserializationResults
-                        |> List.choose (fun result ->
-                            match result with
-                            | Ok _ -> None
-                            | Error error -> Some error)
-                    with
-                    | h :: _ ->
-                        Error
-                            $"At least one line caused a deserialization error when reading {guid} for {path} (e.g. {h})"
-                    | _ ->
-                        let persistedEvents =
-                            deserializationResults
-                            |> List.choose (fun result ->
-                                match result with
-                                | Ok entry -> Some entry
-                                | Error _ -> None)
+                match result with
+                | Ok persistedEvents -> return Ok persistedEvents
+                | Error error -> return Error $"Error when reading {guid} for {path}: {error}"
+            }
 
-                        match checkConsistency persistedEvents None with
-                        | Ok() ->
-                            let deserializationResults =
-                                persistedEvents
-                                |> List.map (fun persistedEvent ->
-                                    deserializationHelper.FromJson<'event> persistedEvent.EventJson
-                                    |> Result.map (fun event -> {
-                                        Rvn = persistedEvent.Rvn
-                                        TimestampUtc = persistedEvent.TimestampUtc
-                                        Event = event
-                                        AuditUserId = persistedEvent.AuditUserId
-                                    }))
-
-                            match
-                                deserializationResults
-                                |> List.choose (fun result ->
-                                    match result with
-                                    | Ok _ -> None
-                                    | Error error -> Some error)
-                            with
-                            | h :: _ ->
-                                Error
-                                    $"At least one {nameof PersistedEvent} caused a deserialization error when reading {guid} for {path} (e.g. {h})"
-                            | _ ->
-                                let events =
-                                    deserializationResults
-                                    |> List.choose (fun result ->
-                                        match result with
-                                        | Ok event -> Some event
-                                        | Error _ -> None)
-
-                                Ok events
-                        | Error error -> Error $"Consistency check failed when reading {guid} for {path}: {error}"
+            match
+                persistedEvents
+                |> List.map (fun persistedEvent ->
+                    deserializationHelper.DecodeEvent persistedEvent.EventJson
+                    |> Result.map (fun event -> {
+                        Rvn = persistedEvent.Rvn
+                        TimestampUtc = persistedEvent.TimestampUtc
+                        Event = event
+                        AuditUserId = persistedEvent.AuditUserId
+                    }))
+                |> List.sequenceResultA
+            with
+            | Ok events -> return! Ok events
+            | Error errors -> return! Error $"One or more decoding error when reading {guid} for {path}: {errors}"
         with exn ->
-            Error $"Unexpected error reading {guid} for {path}: {exn.Message}"
+            return! Error $"Exception when reading {guid} for {path}: {exn.Message}"
+    }
 
-    let tryReadAll () =
+    let tryReadAllAsync () = asyncResult {
         try
-            if Directory.Exists path then
-                let files =
-                    (DirectoryInfo path).GetFiles $"*.{fileExtension}"
-                    |> List.ofArray
-                    |> List.map (fun file ->
-                        match Guid.TryParse(Path.GetFileNameWithoutExtension file.Name) with
-                        | true, guid -> file, Some guid
-                        | false, _ -> file, None)
+            let! _ = // error if path does not exist
+                if not (Directory.Exists path) then
+                    Error $"{path} does not exist when reading all"
+                else
+                    Ok()
 
+            let fileAndGuids =
+                (DirectoryInfo path).GetFiles $"*.{fileExtension}"
+                |> List.ofArray
+                |> List.map (fun file ->
+                    match Guid.TryParse(Path.GetFileNameWithoutExtension file.Name) with
+                    | true, guid -> file, Some guid
+                    | false, _ -> file, None)
+
+            let! guids =
                 match
-                    files
-                    |> List.choose (fun (file, guid) -> if guid.IsNone then Some file else None)
+                    fileAndGuids
+                    |> List.choose (fun (file, guid) -> if guid.IsNone then Some file.Name else None)
                 with
-                | h :: _ ->
-                    Error [
-                        $"At least one .{fileExtension} file in {path} has a non-{nameof Guid} name (e.g. {h.Name})"
-                    ]
-                | _ ->
-                    files
-                    |> List.choose snd
-                    |> List.sort
-                    |> List.map (fun guid -> tryRead guid |> Result.map (fun list -> guid, list))
-                    |> List.sequenceResultA
-            else
-                Error [ $"{path} does not exist when reading all" ]
-        with exn ->
-            Error [ $"Unexpected error reading all for {path}: {exn.Message}" ]
+                | [] -> Ok(fileAndGuids |> List.choose snd)
+                | fileNames ->
+                    Error $"Non-{nameof Guid} .{fileExtension} files exist when reading all for {path}: {fileNames}"
 
-    member _.ReadAll() =
+            let! results =
+                guids
+                |> List.sort
+                |> List.map (fun guid -> tryReadAsync guid |> AsyncResult.map (fun list -> guid, list))
+                |> Async.Parallel
+
+            return!
+                results
+                |> List.ofArray
+                |> List.sequenceResultA
+                |> Result.mapError (fun errors -> $"One or more error when reading all for {path}: {errors}")
+        with exn ->
+            return! Error $"Exception when reading all for {path}: {exn.Message}"
+    }
+
+    member _.ReadAllAsync() = async {
         logger.Debug("Reading {type}s for all...", sanitize typeof<'event>)
 
-        let result = tryReadAll ()
+        let! result = tryReadAllAsync ()
 
         match result with
         | Ok list -> logger.Debug("...{type}s read for {length} file/s", sanitize typeof<'event>, list.Length)
-        | Error errors ->
-            logger.Error(
-                "...{length} error/s reading {type}s for all: {errors}",
-                errors.Length,
-                sanitize typeof<'event>,
-                errors
-            )
+        | Error error -> logger.Error("...error when reading {type}s for all: {error}", sanitize typeof<'event>, error)
 
-        result
+        return result
+    }

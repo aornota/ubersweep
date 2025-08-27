@@ -62,23 +62,6 @@ module private Startup =
             | Ok() -> logger.Information("...{SuperUser} created", SuperUser)
             | Error error -> logger.Error("...error creating {SuperUser}: {error}", SuperUser, error)
 
-        (* TODO-PERSISTENCE: Implement ReadAsync?...
-            match result with
-            | Ok _ ->
-                match! reader.ReadAsync superUser.Guid with
-                | Ok entries ->
-                    match User.helper.FromEntries(superUser.Guid, entries) with
-                    | Ok _ -> logger.Information("...{type} created", SuperUser)
-                    | Error error ->
-                        logger.Error(
-                            "...error processing entries for {type} {guid}: {error}",
-                            SuperUser,
-                            superUser.Guid,
-                            error
-                        )
-                | Error error -> logger.Error("...error reading entries for {type}: {error}", SuperUser, error)
-            | Error error -> logger.Error("...error creating {type}: {error}", SuperUser, error)
-            *)
         | Ok list ->
             list
             |> List.iter (fun (guid, entries) ->
@@ -109,7 +92,7 @@ type Startup(config) =
     do // run migration (subject to configuration)
         Migration(config, persistenceFactory, logger).MigrateAsync()
         |> Async.RunSynchronously
-        |> ignore<Result<unit, string list>>
+        |> ignore<Result<unit, string>>
 
     // TODO-STARTUP...do Startup.checkUsersAsync (persistenceFactory, System(nameof Startup), logger) |> Async.RunSynchronously
 
