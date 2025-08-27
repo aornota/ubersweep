@@ -11,7 +11,7 @@ type SquadInitEvent<'group> =
     | SquadCreated of squadName: string * group: 'group * seeding: Seeding option * coachName: string
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type SquadEvent<'playerType> =
     | PlayerAdded of playerId: PlayerId * playerName: string * playerType: 'playerType
@@ -21,14 +21,14 @@ type SquadEvent<'playerType> =
     | SquadEliminated
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type Squad<'group, 'playerType> = {
     SquadCommon: SquadCommon'<'group, 'playerType>
 } with
 
     interface IState<Squad<'group, 'playerType>, SquadEvent<'playerType>> with
-        member this.SnapshotJson = Json.toJson this
+        member this.SnapshotJson = Json.encode this
 
         member this.Evolve event =
             match event with

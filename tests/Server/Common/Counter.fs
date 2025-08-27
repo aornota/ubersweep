@@ -31,7 +31,7 @@ type CounterInitEvent =
     | Initialized of count: int
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type CounterEvent =
     | Incremented
@@ -40,14 +40,14 @@ type CounterEvent =
     | DividedBy of divisor: int
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type Counter = {
     Count: int
 } with
 
     interface IState<Counter, CounterEvent> with
-        member this.SnapshotJson = Json.toJson this
+        member this.SnapshotJson = Json.encode this
 
         member this.Evolve event =
             match event with

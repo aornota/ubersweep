@@ -27,7 +27,7 @@ type private DeserializationHelper(useLegacyDeserializer) =
         if useLegacyDeserializer then
             LegacyDeserializer.fromJson<'a> json
         else
-            Json.fromJson<'a> json
+            Json.decode<'a> json
 
 type Reader<'event>(path: string, useLegacyDeserializer, logger) =
     [<Literal>]

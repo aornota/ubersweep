@@ -11,14 +11,14 @@ type PostInitEvent =
     | PostCreated of userId: UserId * postType: PostType * messageText: Markdown * timestamp: DateTimeOffset
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type PostEvent =
     | PostChanged of messageText: Markdown
     | PostRemoved
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type Post = {
     PostCommon: PostCommon'
@@ -26,7 +26,7 @@ type Post = {
 } with
 
     interface IState<Post, PostEvent> with
-        member this.SnapshotJson = Json.toJson this
+        member this.SnapshotJson = Json.encode this
 
         member this.Evolve event =
             match event with

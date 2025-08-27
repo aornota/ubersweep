@@ -10,6 +10,10 @@ type Rvn =
         let (Rvn rvn) = this
         Rvn(rvn + 1u)
 
+    member this.UInt32 =
+        let (Rvn rvn) = this
+        rvn
+
     member this.IsValidNextRvn(currentRvn: Rvn option) =
         match currentRvn with
         | None when this.IsInitialRvn -> true

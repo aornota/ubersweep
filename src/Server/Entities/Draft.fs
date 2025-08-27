@@ -11,7 +11,7 @@ type DraftInitEvent =
     | DraftCreated of draftType: DraftType
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type DraftEvent =
     | DraftOpened
@@ -25,14 +25,14 @@ type DraftEvent =
     | FreePickMade of draftPick: DraftPick * userId: UserId * timestamp: DateTimeOffset
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type Draft = {
     DraftCommon: DraftCommon'
 } with
 
     interface IState<Draft, DraftEvent> with
-        member this.SnapshotJson = Json.toJson this
+        member this.SnapshotJson = Json.encode this
 
         member this.Evolve event =
             match event with

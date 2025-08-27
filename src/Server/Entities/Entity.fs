@@ -40,7 +40,7 @@ type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
             | h :: t ->
                 match h with
                 | EventJson(_, _, _, json) ->
-                    match Json.fromJson<'event> json with
+                    match Json.decode<'event> json with
                     | Ok event -> mapToEvents t (event :: events)
                     | Error error -> Error error
                 | SnapshotJson _ -> Error $"Subsequent entries contain a {nameof SnapshotJson}"
@@ -52,7 +52,7 @@ type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
         let! entityFromFirstEntry, subsequentEntries =
             match entries.Head with
             | SnapshotJson(rvn, json) -> result {
-                let! state = Json.fromJson<'state> json
+                let! state = Json.decode<'state> json
 
                 return
                     {
@@ -63,7 +63,7 @@ type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
                     entries.Tail
               }
             | EventJson(_, _, _, json) -> result {
-                let! initEvent = Json.fromJson<'initEvent> json
+                let! initEvent = Json.decode<'initEvent> json
                 return this.InitFromEvent(guid, initEvent), entries.Tail
               }
 

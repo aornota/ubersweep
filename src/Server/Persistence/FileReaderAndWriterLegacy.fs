@@ -102,7 +102,7 @@ type FileReaderAndWriterLegacy
                 | [] -> return! Error $"File exists but is empty when reading {guid} for {pathForError}"
                 | lines ->
                     let deserializationResults =
-                        lines |> List.map (fun line -> Json.fromJson<Entry'> (Json line))
+                        lines |> List.map (fun line -> Json.decode<Entry'> (Json line))
 
                     match
                         deserializationResults
@@ -181,7 +181,7 @@ type FileReaderAndWriterLegacy
             | true ->
                 return! Error $"File already exists when creating from snapshot for {rvn} for {guid} in {pathForError}"
             | false ->
-                let (Json snapshotJson') = Json.toJson (SnapshotJson'(rvn, snapshotJson))
+                let (Json snapshotJson') = Json.encode (SnapshotJson'(rvn, snapshotJson))
                 do! File.WriteAllLinesAsync(file.FullName, [| snapshotJson' |])
 
                 return! Ok()
@@ -204,7 +204,7 @@ type FileReaderAndWriterLegacy
                     Error $"File does not exist when writing event for non-initial {rvn} for {guid} in {pathForError}"
             | true, false ->
                 let (Json eventJson) =
-                    Json.toJson (EventJson'(rvn, utcNow, auditUserId, event.EventJson))
+                    Json.encode (EventJson'(rvn, utcNow, auditUserId, event.EventJson))
 
                 do! File.WriteAllLinesAsync(file.FullName, [| eventJson |])
                 return! Ok()
@@ -214,11 +214,11 @@ type FileReaderAndWriterLegacy
 
                 match lines |> List.ofArray |> List.rev with
                 | lastLine :: _ ->
-                    match Json.fromJson<Entry'> (Json lastLine) with
+                    match Json.decode<Entry'> (Json lastLine) with
                     | Ok entry ->
                         if rvn.IsValidNextRvn(Some entry.Rvn) then
                             let (Json eventJson) =
-                                Json.toJson (EventJson'(rvn, utcNow, auditUserId, event.EventJson))
+                                Json.encode (EventJson'(rvn, utcNow, auditUserId, event.EventJson))
 
                             let (Rvn rvn') = rvn
 
@@ -228,7 +228,7 @@ type FileReaderAndWriterLegacy
                                 | Some getSnapshot, Some snapshotFrequency when
                                     snapshotFrequency > 1u && rvn' % snapshotFrequency = 0u
                                     ->
-                                    let (Json snapshotJson) = Json.toJson (SnapshotJson'(rvn, getSnapshot ()))
+                                    let (Json snapshotJson) = Json.encode (SnapshotJson'(rvn, getSnapshot ()))
                                     [| eventJson; snapshotJson |]
                                 | _ -> [| eventJson |]
 

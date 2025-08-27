@@ -12,7 +12,7 @@ type UserInitEvent =
     | UserCreated of userName: string * passwordSalt: string * passwordHash: string * userType: UserType
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type UserEvent =
     | UserTypeChanged of userType: UserType
@@ -20,7 +20,7 @@ type UserEvent =
     | PasswordReset of passwordSalt: string * passwordHash: string
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type User = {
     UserCommon: UserCommon'
@@ -29,7 +29,7 @@ type User = {
 } with
 
     interface IState<User, UserEvent> with
-        member this.SnapshotJson = Json.toJson this
+        member this.SnapshotJson = Json.encode this
 
         member this.Evolve event =
             match event with

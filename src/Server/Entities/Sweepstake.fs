@@ -16,21 +16,21 @@ type SweepstakeInitEvent =
         status: SweepstakeStatus
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type SweepstakeEvent =
     | Activated
     | Archived
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type Sweepstake = {
     SweepstakeCommon: SweepstakeCommon'
 } with
 
     interface IState<Sweepstake, SweepstakeEvent> with
-        member this.SnapshotJson = Json.toJson this
+        member this.SnapshotJson = Json.encode this
 
         member this.Evolve event =
             match event with

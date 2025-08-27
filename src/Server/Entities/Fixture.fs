@@ -15,7 +15,7 @@ type FixtureInitEvent<'stage, 'unconfirmed> =
         kickOff: DateTimeOffset
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type FixtureEvent<'matchEvent> =
     | ParticipantConfirmed of role: Role * squadId: SquadId
@@ -24,14 +24,14 @@ type FixtureEvent<'matchEvent> =
     | FixtureCancelled
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type Fixture<'stage, 'unconfirmed, 'matchEvent> = {
     FixtureCommon: FixtureCommon'<'stage, 'unconfirmed, 'matchEvent>
 } with
 
     interface IState<Fixture<'stage, 'unconfirmed, 'matchEvent>, FixtureEvent<'matchEvent>> with
-        member this.SnapshotJson = Json.toJson this
+        member this.SnapshotJson = Json.encode this
 
         member this.Evolve event =
             match event with

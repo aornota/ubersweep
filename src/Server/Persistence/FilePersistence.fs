@@ -4,6 +4,7 @@ open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Shared.Common
 
 open FsToolkit.ErrorHandling
+open Thoth.Json.Net
 open Microsoft.Extensions.Configuration
 open Serilog
 open System
@@ -14,8 +15,8 @@ open System.IO
 
 type EventsFile = {
     EventsFileName: string
-    FromRvn: Rvn
-    ToRvn: Rvn
+    FirstRvn: Rvn
+    LastRvn: Rvn
 }
 
 type EventLine = EventLine of rvn: Rvn * timestampUtc: DateTime * source: Source * json: Json
@@ -39,12 +40,80 @@ module FilePersistence =
     [<Literal>]
     let snapshotFileExtension = "snapshot"
 
-    let getEventsFileName (Rvn fromRvn, Rvn toRvn) =
-        $"{fromRvn}-{toRvn}.{eventsFileExtension}"
+    let private eventLineDecoder =
+        Decode.Auto.generateDecoderCached<EventLine> (Json.caseStrategy, Json.extraCoders)
 
-    let getSnapshotFileName (Rvn rvn) = $"{rvn}.{snapshotFileExtension}"
+    let private snapshotLineDecoder =
+        Decode.Auto.generateDecoderCached<SnapshotLine> (Json.caseStrategy, Json.extraCoders)
 
-    let getDirStatus (dir: DirectoryInfo, guid: Guid) = result {
+    let decodeEventLine (Json json) = Decode.fromString eventLineDecoder json
+
+    let decodeSnapshotLine (Json json) =
+        Decode.fromString snapshotLineDecoder json
+
+    let tryDecodeEventsFileAsync (path: string, eventsFile: EventsFile) = asyncResult {
+        // TODO: Concistency check (i.e. first / last / contiguous revisions)...
+
+        try
+            let! lines = File.ReadAllLinesAsync(Path.Combine(path, eventsFile.EventsFileName))
+
+            match lines |> List.ofArray with
+            | [] -> return! Error $"Snspshot file {eventsFile.EventsFileName} is empty"
+            | lines ->
+                match
+                    lines
+                    |> List.map (fun line -> decodeEventLine (Json line))
+                    |> List.sequenceResultA
+                with
+                | Ok eventLines ->
+                    // TODO-PERSISTENCE: Check that eventLines have contiguous Rvns - and that first and last match eventsFile.[From|To]Rvn - even if not strictMode...
+                    return!
+                        Ok(
+                            eventLines
+                            |> List.map (fun (EventLine(rvn, timestampUtc, source, json)) ->
+                                EventJson(rvn, timestampUtc, source, json))
+                        )
+                | Error errors ->
+                    return! Error $"One or more decoding error for events file {eventsFile.EventsFileName}: {errors}"
+        with exn ->
+            return! Error $"Exception when decoding events file {eventsFile.EventsFileName}: {exn.Message}"
+    }
+
+    let tryDecodeSnapshotFileAsync (path: string, snapshotFile: SnapshotFile) = asyncResult {
+        try
+            let! lines = File.ReadAllLinesAsync(Path.Combine(path, snapshotFile.SnapshotFileName))
+
+            match lines |> List.ofArray with
+            | [] -> return! Error $"Snapshot file {snapshotFile.SnapshotFileName} is empty"
+            | [ line ] ->
+                match decodeSnapshotLine (Json line) with
+                | Ok(SnapshotLine(rvn, json)) when rvn = snapshotFile.Rvn -> return! Ok(SnapshotJson(rvn, json))
+                | Ok(SnapshotLine(rvn, _)) ->
+                    return!
+                        Error
+                            $"Expected {snapshotFile.Rvn} for snapshot file {snapshotFile.SnapshotFileName} but decoded {nameof SnapshotLine} is {rvn}"
+                | Error error ->
+                    return! Error $"Decoding error for snapshot file {snapshotFile.SnapshotFileName}: {error}"
+            | _ -> return! Error $"Snapshot file {snapshotFile.SnapshotFileName} contains multiople lines"
+        with exn ->
+            return! Error $"Exception when decoding snapshot file {snapshotFile.SnapshotFileName}: {exn.Message}"
+    }
+
+    let getEventsFileName (Rvn firstRvn, Rvn lastRvn) =
+        match firstRvn, lastRvn with
+        | 0u, _ -> Error $"First {nameof Rvn} for name of events file must not be {Rvn 0u}"
+        | _, 0u -> Error $"Last {nameof Rvn} for name of events file must not be {Rvn 0u}"
+        | fromRvn, toRvn when fromRvn > toRvn ->
+            Error
+                $"First {nameof Rvn} ({Rvn firstRvn}) must not be greater than last {nameof Rvn} ({Rvn lastRvn}) for name of events file"
+        | _ -> Ok $"{firstRvn}-{lastRvn}.{eventsFileExtension}"
+
+    let getSnapshotFileName (Rvn rvn) =
+        match rvn with
+        | 0u -> Error $"{nameof Rvn} for name of snapshot file must not be {Rvn 0u}"
+        | _ -> Ok $"{rvn}.{snapshotFileExtension}"
+
+    let getDirStatusAsync (dir: DirectoryInfo, guid: Guid) = asyncResult {
         let parseEventsFileName (fileName: string) =
             let fileNameWithoutExtension = Path.GetFileNameWithoutExtension fileName
 
@@ -66,8 +135,8 @@ module FilePersistence =
             | Some(fromRvn, toRvn) ->
                 Ok {
                     EventsFileName = fileName
-                    FromRvn = Rvn fromRvn
-                    ToRvn = Rvn toRvn
+                    FirstRvn = Rvn fromRvn
+                    LastRvn = Rvn toRvn
                 }
             | None -> Error $"Invalid name for events file {fileName}"
 
@@ -134,10 +203,10 @@ module FilePersistence =
             return!
                 match eventsFiles, snapshotFiles with
                 | [], [] -> Ok Empty
-                | [ eventsFile ], [] when eventsFile.FromRvn = Rvn.InitialRvn -> Ok(EventsOnly eventsFile)
+                | [ eventsFile ], [] when eventsFile.FirstRvn = Rvn.InitialRvn -> Ok(EventsOnly eventsFile)
                 | [ eventsFile ], [] ->
                     Error
-                        $"First {nameof Rvn} ({eventsFile.FromRvn}) is not {Rvn.InitialRvn} for only events file in {pathForError}: {eventsFileNames}"
+                        $"First {nameof Rvn} ({eventsFile.FirstRvn}) is not {Rvn.InitialRvn} for only events file in {pathForError}: {eventsFileNames}"
                 | _, [] ->
                     Error $"There are multiple events files and no snapshot files in {pathForError}: {eventsFileNames}"
                 | [], [ snapshotFile ] -> Ok(SnapshotOnly snapshotFile) // note: only snapshot file does not have to be Rvn.InitialRvn
@@ -153,7 +222,7 @@ module FilePersistence =
 
                     match
                         eventsFiles
-                        |> List.tryFind (fun eventsFile -> eventsFile.FromRvn = lastSnapshotFile.Rvn.NextRvn)
+                        |> List.tryFind (fun eventsFile -> eventsFile.FirstRvn = lastSnapshotFile.Rvn.NextRvn)
                     with
                     | Some subsequentEventsFile -> Ok(SnapshotAndEvents(lastSnapshotFile, subsequentEventsFile))
                     | None -> Ok(SnapshotOnly lastSnapshotFile)
@@ -205,7 +274,13 @@ type private FileReaderAndWriter
 
     let tryReadAsync (guid: Guid) : Async<Result<NonEmptyList<Entry>, string>> = asyncResult {
         try
-            let! dirStatus = FilePersistence.getDirStatus (DirectoryInfo path, guid)
+            let! dirStatus = async {
+                let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid)
+
+                match result with
+                | Ok dirStatus -> return Ok dirStatus
+                | Error error -> return Error $"Error when reading {guid} for {pathForError}: {error}"
+            }
 
             let! snapshotFile, eventsFile =
                 match dirStatus with
@@ -215,63 +290,26 @@ type private FileReaderAndWriter
                 | SnapshotOnly snapshotFile -> Ok(Some snapshotFile, None)
                 | SnapshotAndEvents(snapshotFile, eventsFile) -> Ok(Some snapshotFile, Some eventsFile)
 
-            let! snapshotEntry = asyncResult {
+            let! snapshotEntry = async {
                 match snapshotFile with
                 | Some snapshotFile ->
-                    let! lines = File.ReadAllLinesAsync(Path.Combine(path, snapshotFile.SnapshotFileName))
+                    let! result = FilePersistence.tryDecodeSnapshotFileAsync (path, snapshotFile)
 
-                    match lines |> List.ofArray with
-                    | [] ->
-                        return!
-                            Error
-                                $"Snapshot file {snapshotFile.SnapshotFileName} is empty when reading {guid} for {pathForError}"
-                    | [ line ] ->
-                        match Json.fromJson<SnapshotLine> (Json line) with
-                        | Ok(SnapshotLine(rvn, json)) when rvn <> snapshotFile.Rvn ->
-                            return!
-                                Error
-                                    $"Expected {snapshotFile.Rvn} for snapshot file {snapshotFile.SnapshotFileName} but deserialized {nameof SnapshotLine} is {rvn} when reading {guid} for {pathForError}"
-                        | Ok(SnapshotLine(rvn, json)) -> return! Ok(Some(SnapshotJson(rvn, json)))
-                        | Error error ->
-                            return!
-                                Error
-                                    $"Deserialization error for snapshot file {snapshotFile.SnapshotFileName} when reading {guid} for {pathForError}: {error}"
-                    | _ ->
-                        return!
-                            Error
-                                $"Snapshot file {snapshotFile.SnapshotFileName} contains multiople lines when reading {guid} for {pathForError}"
-                | None -> return! Ok None
+                    match result with
+                    | Ok snapshotEntry -> return Ok(Some snapshotEntry)
+                    | Error error -> return Error $"Error when reading {guid} for {pathForError}: {error}"
+                | None -> return Ok None
             }
 
-            let! eventEntries = asyncResult {
+            let! eventEntries = async {
                 match eventsFile with
                 | Some eventsFile ->
-                    let! lines = File.ReadAllLinesAsync(Path.Combine(path, eventsFile.EventsFileName))
+                    let! result = FilePersistence.tryDecodeEventsFileAsync (path, eventsFile)
 
-                    match lines |> List.ofArray with
-                    | [] ->
-                        return!
-                            Error
-                                $"Events file {eventsFile.EventsFileName} is empty when reading {guid} for {pathForError}"
-                    | lines ->
-                        match
-                            lines
-                            |> List.map (fun line -> Json.fromJson<EventLine> (Json line))
-                            |> List.sequenceResultA
-                        with
-                        | Ok eventLines ->
-                            // TODO-PERSISTENCE: Check that eventLines have contiguous Rvns - and that first and last match eventsFile.[From|To]Rvn - even if not strictMode...
-                            return!
-                                Ok(
-                                    eventLines
-                                    |> List.map (fun (EventLine(rvn, timestampUtc, source, json)) ->
-                                        EventJson(rvn, timestampUtc, source, json))
-                                )
-                        | Error errors ->
-                            return!
-                                Error
-                                    $"One or more deserialization error for events file {eventsFile.EventsFileName} when reading {guid} for {pathForError}: {errors}"
-                | None -> return! Ok []
+                    match result with
+                    | Ok eventEntries -> return Ok eventEntries
+                    | Error error -> return Error $"Error when reading {guid} for {pathForError}: {error}"
+                | None -> return Ok []
             }
 
             return!
@@ -287,7 +325,7 @@ type private FileReaderAndWriter
             if not (Directory.Exists path) then
                 Directory.CreateDirectory path |> ignore<DirectoryInfo>
 
-            let! _ =
+            let! _ = // error if any files exist
                 match (DirectoryInfo path).GetFiles() |> List.ofArray |> List.map _.Name with
                 | [] -> Ok()
                 | fileNames -> Error $"Files exist when reading all for {pathForError}: {fileNames}"
@@ -326,7 +364,14 @@ type private FileReaderAndWriter
 
     let tryCreateFromSnapshotAsync (guid: Guid, rvn: Rvn, snapshotJson: Json) = asyncResult {
         try
-            let! dirStatus = FilePersistence.getDirStatus (DirectoryInfo path, guid)
+            let! dirStatus = async {
+                let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid)
+
+                match result with
+                | Ok dirStatus -> return Ok dirStatus
+                | Error error ->
+                    return Error $"Error when creating from snapshot for {guid} for {pathForError}: {error}"
+            }
 
             let! dirExists =
                 match dirStatus with
@@ -342,11 +387,9 @@ type private FileReaderAndWriter
             if not dirExists then
                 Directory.CreateDirectory pathForGuid |> ignore<DirectoryInfo>
 
-            let snapshotFilePath =
-                Path.Combine(pathForGuid, FilePersistence.getSnapshotFileName rvn)
-
-            let (Json snapshotLine) = Json.toJson (SnapshotLine(rvn, snapshotJson))
-
+            let! snapshotFileName = FilePersistence.getSnapshotFileName rvn
+            let snapshotFilePath = Path.Combine(pathForGuid, snapshotFileName)
+            let (Json snapshotLine) = Json.encode (SnapshotLine(rvn, snapshotJson))
             do! File.WriteAllLinesAsync(snapshotFilePath, [| snapshotLine |])
 
             return! Ok()
@@ -356,32 +399,60 @@ type private FileReaderAndWriter
 
     let tryWriteEventAsync (guid: Guid, rvn: Rvn, source: Source, event: IEvent, getSnapshot: GetSnapshot option) = asyncResult {
         try
-            let! dirStatus = FilePersistence.getDirStatus (DirectoryInfo path, guid)
+            let! dirStatus = async {
+                let! result = FilePersistence.getDirStatusAsync (DirectoryInfo path, guid)
 
-            let! appendToEventsFile =
+                match result with
+                | Ok dirStatus -> return Ok dirStatus
+                | Error error -> return Error $"Error when writing event for {guid} for {pathForError}: {error}"
+            }
+
+            let! appendToEventsFile = async {
                 match dirStatus with
                 | DoesNotExist
                 | Empty ->
                     if rvn = Rvn.InitialRvn then
-                        Ok None
+                        return Ok None
                     else
-                        Error
-                            $"Directory for {guid} is enpty but {rvn} is not {Rvn.InitialRvn} when writing event for {guid} in {pathForError}"
+                        return
+                            Error
+                                $"Directory for {guid} is enpty but {rvn} is not {Rvn.InitialRvn} when writing event for {guid} in {pathForError}"
                 | EventsOnly eventsFile
                 | SnapshotAndEvents(_, eventsFile) ->
-                    if rvn = eventsFile.ToRvn.NextRvn then
-                        // TODO-PERSISTENCE: If strictMode, read eventsFile and check that last line is actually ToRvn?...
-                        Ok(Some eventsFile)
+                    if rvn = eventsFile.LastRvn.NextRvn then
+                        if strictMode then
+                            // This will (among other checks) verify that the last EventLine in the file is actually eventsFile.LastRvn.
+                            let! result = FilePersistence.tryDecodeEventsFileAsync (path, eventsFile)
+
+                            match result with
+                            | Ok _ -> return Ok(Some eventsFile)
+                            | Error error ->
+                                return
+                                    Error $"Strict mode error when writing event for {guid} for {pathForError}: {error}"
+                        else
+                            return Ok(Some eventsFile)
                     else
-                        Error
-                            $"{rvn} is inconsistent with latest {nameof Rvn} ({eventsFile.ToRvn}) for events file {eventsFile.EventsFileName} when writing event for {guid} in {pathForError}"
+                        return
+                            Error
+                                $"{rvn} is inconsistent with latest {nameof Rvn} ({eventsFile.LastRvn}) for events file {eventsFile.EventsFileName} when writing event for {guid} in {pathForError}"
                 | SnapshotOnly snapshotFile ->
                     if rvn = snapshotFile.Rvn.NextRvn then
-                        // TODO-PERSISTENCE: If strictMode, read snapshotFile and check that only line is actually Rvn?...
-                        Ok None
+                        if strictMode then
+                            // This will (among other checks) verify that the only SnapshotLine in the file is actually snapshotFile.Rvn.
+                            let! result = FilePersistence.tryDecodeSnapshotFileAsync (path, snapshotFile)
+
+                            match result with
+                            | Ok _ -> return Ok None
+                            | Error error ->
+                                return
+                                    Error $"Strict mode error when writing event for {guid} for {pathForError}: {error}"
+                        else
+                            return Ok None
                     else
-                        Error
-                            $"{rvn} is inconsistent with {nameof Rvn} ({snapshotFile.Rvn}) for latest snapshot file {snapshotFile.SnapshotFileName} when writing event for {guid} in {pathForError}"
+                        return
+                            Error
+                                $"{rvn} is inconsistent with {nameof Rvn} ({snapshotFile.Rvn}) for latest snapshot file {snapshotFile.SnapshotFileName} when writing event for {guid} in {pathForError}"
+            }
 
             let pathForGuid = Path.Combine(path, guid.ToString())
 
@@ -389,32 +460,26 @@ type private FileReaderAndWriter
                 Directory.CreateDirectory pathForGuid |> ignore<DirectoryInfo>
 
             let (Json eventLine) =
-                Json.toJson (EventLine(rvn, clock.GetUtcNow(), source, event.EventJson))
+                Json.encode (EventLine(rvn, clock.GetUtcNow(), source, event.EventJson))
 
             match appendToEventsFile with
             | Some eventsFile ->
                 let eventsFilePath = Path.Combine(pathForGuid, eventsFile.EventsFileName)
-
-                let newEventsFilePath =
-                    Path.Combine(pathForGuid, FilePersistence.getEventsFileName (eventsFile.FromRvn, rvn))
-
+                let! newEventsFileName = FilePersistence.getEventsFileName (eventsFile.FirstRvn, rvn)
+                let newEventsFilePath = Path.Combine(pathForGuid, newEventsFileName)
                 do! File.AppendAllLinesAsync(eventsFilePath, [| eventLine |])
                 File.Move(eventsFilePath, newEventsFilePath)
             | None ->
-                let eventsFilePath =
-                    Path.Combine(pathForGuid, FilePersistence.getEventsFileName (rvn, rvn))
-
+                let! eventsFileName = FilePersistence.getEventsFileName (rvn, rvn)
+                let eventsFilePath = Path.Combine(pathForGuid, eventsFileName)
                 do! File.WriteAllLinesAsync(eventsFilePath, [| eventLine |])
 
             match getSnapshot, snapshotFrequency with
             | Some getSnapshot, Some snapshotFrequency when snapshotFrequency > 1u ->
-                let (Rvn rvn') = rvn
-
-                if rvn' % snapshotFrequency = 0u then
-                    let snapshotFilePath =
-                        Path.Combine(pathForGuid, FilePersistence.getSnapshotFileName rvn)
-
-                    let (Json snapshotLine) = Json.toJson (SnapshotJson(rvn, getSnapshot ()))
+                if rvn.UInt32 % snapshotFrequency = 0u then
+                    let! snapshotFileName = FilePersistence.getSnapshotFileName rvn
+                    let snapshotFilePath = Path.Combine(pathForGuid, snapshotFileName)
+                    let (Json snapshotLine) = Json.encode (SnapshotJson(rvn, getSnapshot ()))
                     do! File.WriteAllLinesAsync(snapshotFilePath, [| snapshotLine |])
                 else
                     ()

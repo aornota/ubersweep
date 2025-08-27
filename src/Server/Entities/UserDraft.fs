@@ -11,7 +11,7 @@ type UserDraftInitEvent =
     | UserDraftCreated of userId: UserId * draftId: DraftId
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type UserDraftEvent =
     | DraftPickAdded of userDraftPick: UserDraftPick
@@ -19,14 +19,14 @@ type UserDraftEvent =
     | DraftPickPriorityChanged of userDraftPick: UserDraftPick * priorityChange: PriorityChange
 
     interface IEvent with
-        member this.EventJson = Json.toJson this
+        member this.EventJson = Json.encode this
 
 type UserDraft = {
     UserDraftCommon: UserDraftCommon'
 } with
 
     interface IState<UserDraft, UserDraftEvent> with
-        member this.SnapshotJson = Json.toJson this
+        member this.SnapshotJson = Json.encode this
 
         member this.Evolve event =
             match event with
