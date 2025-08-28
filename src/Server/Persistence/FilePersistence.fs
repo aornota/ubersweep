@@ -248,12 +248,14 @@ module FilePersistence =
 
                 match invalidExtensionFileNames with
                 | [] -> Ok()
-                | _ -> Error $"There are file/s with invalid extensions in {pathForError}: {invalidExtensionFileNames}"
+                | _ ->
+                    Error $"One or more file with an invalid extension in {pathForError}: {invalidExtensionFileNames}"
 
             let! eventsFiles =
                 match
                     eventsFileNames
                     |> List.ofSeq
+                    |> List.sort
                     |> List.map parseEventsFileName
                     |> List.sequenceResultA
                 with
@@ -262,17 +264,18 @@ module FilePersistence =
                         eventsFiles
                         |> List.sortBy (fun eventFile -> eventFile.FirstRvn, eventFile.LastRvn)
                     )
-                | Error errors -> Error $"There are events file/s with invalid names in {pathForError}: {errors}"
+                | Error errors -> Error $"One or more events file with an invalid name in {pathForError}: {errors}"
 
             let! snapshotFiles =
                 match
                     snapshotFileNames
                     |> List.ofSeq
+                    |> List.sort
                     |> List.map parseSnapshotFileName
                     |> List.sequenceResultA
                 with
                 | Ok snapshotFiles -> Ok(snapshotFiles |> List.sortBy _.Rvn)
-                | Error errors -> Error $"There are snapshot file/s with invalid names in {pathForError}: {errors}"
+                | Error errors -> Error $"One or more snapshot file with an invalid name in {pathForError}: {errors}"
 
             let! decodeEventsFilesResults = async {
                 if strictMode then

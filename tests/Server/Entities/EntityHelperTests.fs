@@ -29,17 +29,14 @@ module EntityHelperTests =
                     return! helper.FromEntries(guid, entries)
                 }
 
-                match result with
-                | Ok counter ->
-                    let expectedCounter =
-                        Ok {
-                            Id = CounterId.FromGuid guid
-                            Rvn = Rvn.InitialRvn
-                            State = { Count = 1 }
-                        }
-
-                    Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
-                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+                result
+                |> Check.isOk (
+                    Ok {
+                        Id = CounterId.FromGuid guid
+                        Rvn = Rvn.InitialRvn
+                        State = { Count = 1 }
+                    }
+                )
             }
             test "From multiple event entries" {
                 let helper = CounterEventHelper()
@@ -59,17 +56,14 @@ module EntityHelperTests =
                     return! helper.FromEntries(guid, entries)
                 }
 
-                match result with
-                | Ok counter ->
-                    let expectedCounter =
-                        Ok {
-                            Id = CounterId.FromGuid guid
-                            Rvn = Rvn 3u
-                            State = { Count = 1 }
-                        }
-
-                    Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
-                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+                result
+                |> Check.isOk (
+                    Ok {
+                        Id = CounterId.FromGuid guid
+                        Rvn = Rvn 3u
+                        State = { Count = 1 }
+                    }
+                )
             }
             test "From multiple entries with snapshot" {
                 let helper = CounterEventHelper()
@@ -88,17 +82,14 @@ module EntityHelperTests =
                     return! helper.FromEntries(guid, entries)
                 }
 
-                match result with
-                | Ok counter ->
-                    let expectedCounter =
-                        Ok {
-                            Id = CounterId.FromGuid guid
-                            Rvn = Rvn 4u
-                            State = { Count = 2 }
-                        }
-
-                    Expect.equal counter expectedCounter $"Unexpected {nameof Ok} {nameof result}"
-                | Error _ -> Expect.isOk result $"{nameof result} should be {nameof Ok}"
+                result
+                |> Check.isOk (
+                    Ok {
+                        Id = CounterId.FromGuid guid
+                        Rvn = Rvn 4u
+                        State = { Count = 2 }
+                    }
+                )
             }
         ]
 
@@ -123,13 +114,7 @@ module EntityHelperTests =
                     return! helper.FromEntries(guid, entries)
                 }
 
-                match result with
-                | Ok _ -> Expect.isError result $"{nameof result} should be {nameof Error}"
-                | Error error ->
-                    Expect.equal
-                        error
-                        $"Subsequent entries contain a {nameof SnapshotJson}"
-                        $"{nameof Error} is not the expected error"
+                result |> Check.isError $"Subsequent entries contain a {nameof SnapshotJson}"
             }
         ]
 

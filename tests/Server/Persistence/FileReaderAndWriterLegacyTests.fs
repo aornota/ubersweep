@@ -11,7 +11,7 @@ open FsToolkit.ErrorHandling
 open System
 
 [<RequireQualifiedAccess>]
-module FileReaderAndWriterTestsLegacy =
+module FileReaderAndWriterLegacyTests =
     let private initializeAndApply
         (
             guid,

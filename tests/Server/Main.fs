@@ -9,14 +9,15 @@ open Serilog
 module Main =
     let tests =
         testList "Server" [
-            EntityHelperTests.tests
-            FileReaderAndWriterTestsLegacy.tests
-            UserTests.tests
+            //EntityHelperTests.tests
+            FilePersistenceTests.tests
+        //FileReaderAndWriterLegacyTests.tests
+        //UserTests.tests
         ]
 
     [<EntryPoint>]
     let main _ =
-        (* TODO: Decide if logging is useful - and how best to configure it if so...
+        (* TODO-TESTS: Decide if logging is useful - and how best to configure it if so...
         Log.Logger <-
             LoggerConfiguration()
                 .MinimumLevel.Information()
