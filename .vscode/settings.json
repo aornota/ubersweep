@@ -26,6 +26,7 @@
         "**/paket-files": true,
         "**/persisted": true,
         "**/secret": true,
+        "**/testDirs": true,
         "**/ubersweep.sln": true,
     },
     "[fsharp]": {

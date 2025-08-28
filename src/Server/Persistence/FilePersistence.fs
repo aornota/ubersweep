@@ -315,7 +315,7 @@ module FilePersistence =
                 | [ eventsFile ], [] ->
                     return!
                         Error
-                            $"First {nameof Rvn} ({eventsFile.FirstRvn}) is not {Rvn.InitialRvn} for only events file in {pathForError}: {eventsFileNames}"
+                            $"First {nameof Rvn} ({eventsFile.FirstRvn}) is not {Rvn.InitialRvn} for only events file {eventsFile.EventsFileName} in {pathForError}"
                 | _, [] ->
                     return!
                         Error
