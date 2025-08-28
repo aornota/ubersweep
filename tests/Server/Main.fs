@@ -11,6 +11,7 @@ module Main =
         testList "Server" [
             EntityHelperTests.tests
             FilePersistenceTests.tests
+            FilePersistenceFactoryTests.tests
             //FileReaderAndWriterLegacyTests.tests
             UserTests.tests
         ]

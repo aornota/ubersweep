@@ -9,7 +9,7 @@ open FsToolkit.ErrorHandling
 open System
 open System.IO
 
-type private TestPersistenceDir(createDirForGuid: Guid option, ?retainOnDispose) =
+type private TestSimplePersistenceDir(createDirForGuid: Guid option, ?retainOnDispose) =
     let retainOnDispose = defaultArg retainOnDispose false
 
     let path = Path.Combine(@".\testDirs", Guid.NewGuid().ToString())
@@ -48,7 +48,7 @@ type private TestPersistenceDir(createDirForGuid: Guid option, ?retainOnDispose)
 
 [<RequireQualifiedAccess>]
 module FilePersistenceTests =
-    let private tryWriteFilesAsync (testDir: TestPersistenceDir, guid: Guid, files: (string * string list) list) = asyncResult {
+    let private tryWriteFilesAsync (testDir: TestSimplePersistenceDir, guid: Guid, files: (string * string list) list) = asyncResult {
         let! result =
             files
             |> List.map (fun (fileName, lines) -> testDir.TryWriteFileAsync(guid, fileName, lines))
@@ -62,7 +62,7 @@ module FilePersistenceTests =
             |> Result.mapError (fun errors -> $"One or more error when writing files: {errors}")
     }
 
-    let private tryWriteEmptyFilesAsync (testDir: TestPersistenceDir, guid: Guid, fileNames: string list) = asyncResult {
+    let private tryWriteEmptyFilesAsync (testDir: TestSimplePersistenceDir, guid: Guid, fileNames: string list) = asyncResult {
         return! tryWriteFilesAsync (testDir, guid, fileNames |> List.map (fun fileName -> fileName, []))
     }
 
@@ -87,7 +87,7 @@ module FilePersistenceTests =
             testList "tryDecodeEventsFileAsync" [
                 testAsync "When events file is valid" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFile, eventsFileLines =
                         {
@@ -116,7 +116,7 @@ module FilePersistenceTests =
             testList "tryDecodeSnapshotFileAsync" [
                 testAsync "When snapshot file is valid" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFile, snapshotFileLines =
                         {
@@ -139,7 +139,7 @@ module FilePersistenceTests =
                 // Note: Can use empty files since not strict mode.
                 testAsync "When directory for Guid does not exist" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(None)
+                    use testDir = new TestSimplePersistenceDir(None)
 
                     let! result = FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
 
@@ -147,7 +147,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When directory for Guid is empty" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let! result = FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
 
@@ -155,7 +155,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When single events file with initial first revision" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName = addFileExtension Events "1-9"
 
@@ -175,7 +175,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When single snapshot file with initial revision" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFileName = addFileExtension Snapshot "1"
 
@@ -194,7 +194,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When single snapshot file with non-initial revision" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFileName = addFileExtension Snapshot "666"
 
@@ -213,7 +213,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When single snapshot file with initial revision and subsequent contiguous events file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFileName = addFileExtension Snapshot "1"
                     let eventsFileName = addFileExtension Events "2-2"
@@ -240,7 +240,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When single snapshot file with non-initial revision and subsequent contiguous events file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName1 = addFileExtension Events "1-36"
                     let snapshotFileName = addFileExtension Snapshot "36"
@@ -274,7 +274,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When multiple snapshot files and no subsequent events file for last snapshot file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName1 = addFileExtension Events "1-36"
                     let snapshotFileName1 = addFileExtension Snapshot "36"
@@ -302,7 +302,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When multiple snapshot files and subsequent contiguous events file for last snapshot file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName1 = addFileExtension Events "1-36"
                     let snapshotFileName1 = addFileExtension Snapshot "36"
@@ -347,7 +347,7 @@ module FilePersistenceTests =
                 // Note: Only need a couple of tests - i.e. sufficient to check that file contents are being checked - but cannot use empty files.
                 testAsync "When single non-empty events file with initial first revision" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName, eventsFilelines =
                         addFileExtension Events "1-1",
@@ -371,7 +371,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When single non-empty snapshot file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFileName, snapshotFileLines =
                         addFileExtension Snapshot "1", [ """["SnapshotLine",["Rvn",1],["Json","{\"Count\":1}"]]""" ]
@@ -420,7 +420,7 @@ module FilePersistenceTests =
             testList "tryDecodeEventsFileAsync" [
                 testAsync "When events file is empty" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFile = {
                         EventsFileName = addFileExtension Events "1-9"
@@ -437,7 +437,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When expected first revision for events file differs from first event line" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFile, eventsFileLines =
                         {
@@ -463,7 +463,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When events file has event line with revision not contiguous with previous event line" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFile, eventsFileLines =
                         {
@@ -489,7 +489,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When expected last revision for events file differs from last event line" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFile, eventsFileLines =
                         {
@@ -515,7 +515,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When decoding errors for events file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFile, eventsFileLines =
                         {
@@ -543,7 +543,7 @@ module FilePersistenceTests =
             testList "tryDecodeSnapshotFileAsync" [
                 testAsync "When snapshot file is empty" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFile = {
                         SnapshotFileName = addFileExtension Snapshot "1"
@@ -560,7 +560,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When expected revision for snapshot file differs from snapshot line" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFile, snapshotFileLines =
                         {
@@ -582,7 +582,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When decoding error for snapshot file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFile, snapshotFileLines =
                         {
@@ -604,7 +604,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When snapshot file contains multiple lines" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFile, snapshotFileLines =
                         {
@@ -631,7 +631,7 @@ module FilePersistenceTests =
                 // Note: Can use empty files since not strict mode.
                 testAsync "When files with invalid extensions" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let fileNamesWithInvalidExtensions = [ "1-9.evonts"; "9.snipshot" ]
 
@@ -646,7 +646,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When events files with invalid names" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let invalidEventsFileNames =
                         [ "0-1"; "1.5-1"; "a-1"; "1-0"; "1-1.5"; "1-a"; "2-1"; "1-"; "-1"; "1"; "a" ]
@@ -668,7 +668,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When snapshot files with invalid names" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let invalidSnapshotFileNames =
                         [ "0"; "1-"; "-1"; "1.5"; "a" ] |> List.map (addFileExtension Snapshot)
@@ -689,7 +689,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When single events file with non-initial first revision" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName = addFileExtension Events "2-9"
 
@@ -704,7 +704,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When multiple events files and no snapshot files" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileNames = [ "1-5"; "6-6" ] |> List.map (addFileExtension Events)
 
@@ -719,7 +719,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When multiple snapshot files and no events files" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFileNames = [ "1"; "2" ] |> List.map (addFileExtension Snapshot)
 
@@ -734,7 +734,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When first events file with non-initial first revision (and no previous snapshot file)" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName = addFileExtension Events "2-9"
                     let snapshotFileName = addFileExtension Snapshot "10"
@@ -750,7 +750,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When snapshot file follows snapshot file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName = addFileExtension Events "1-5"
                     let snapshotFileName1 = addFileExtension Snapshot "5"
@@ -773,7 +773,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When events file follows events file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFileName = addFileExtension Snapshot "3"
                     let eventsFileName1 = addFileExtension Events "4-8"
@@ -796,7 +796,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When revision for snapshot file not the same as last revision for previous events file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName1 = addFileExtension Events "1-100"
                     let snapshotFileName1 = addFileExtension Snapshot "100"
@@ -820,7 +820,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When first revision for events file not contiguous with revision for previous snapshot file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName1 = addFileExtension Events "1-100"
                     let snapshotFileName = addFileExtension Snapshot "100"
@@ -846,7 +846,7 @@ module FilePersistenceTests =
                 // Note: Only need a couple of tests - i.e. sufficient to check that file contents are being checked - so can use empty files.
                 testAsync "When single empty events file with initial first revision" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let eventsFileName = addFileExtension Events "1-9"
 
@@ -863,7 +863,7 @@ module FilePersistenceTests =
                 }
                 testAsync "When single empty snapshot file" {
                     let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
+                    use testDir = new TestSimplePersistenceDir(Some guid)
 
                     let snapshotFileName = addFileExtension Snapshot "1"
 
