@@ -4,16 +4,19 @@ open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Entities
 
 open Expecto
+open System
 
 [<AutoOpen>]
 module Common =
     let fixedUtcNow = (FixedClock.instance :> IPersistenceClock).GetUtcNow()
 
-    let auditUser1Id = UserId.Create()
-    let auditUser2Id = UserId.Create()
+    let userId1 = UserId.Create()
+    let userId2 = UserId.Create()
 
-    let sourceUser1 = User auditUser1Id
-    let sourceUser2 = User auditUser2Id
+    let sourceUser1 = User userId1
+    let sourceUser2 = User userId2
+
+    let sourceSystemTest = System "Test"
 
 [<RequireQualifiedAccess>]
 module Check =

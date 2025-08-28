@@ -9,10 +9,10 @@ open Serilog
 module Main =
     let tests =
         testList "Server" [
-            //EntityHelperTests.tests
+            EntityHelperTests.tests
             FilePersistenceTests.tests
-        //FileReaderAndWriterLegacyTests.tests
-        //UserTests.tests
+            //FileReaderAndWriterLegacyTests.tests
+            UserTests.tests
         ]
 
     [<EntryPoint>]

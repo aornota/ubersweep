@@ -32,47 +32,20 @@ type private TestPersistenceDir(createDirForGuid: Guid option, ?retainOnDispose)
     member _.Dir = dir
     member _.PathForError(guid: Guid) = $@"...\{dir.Name}\{guid}"
 
-    member _.TryWriteEmptyFileAsync(guid: Guid, fileName: string) = asyncResult {
+    member this.TryWriteEmptyFileAsync(guid: Guid, fileName: string) =
+        this.TryWriteFileAsync(guid, fileName, [])
+
+    member _.TryWriteFileAsync(guid: Guid, fileName: string, lines: string list) = asyncResult {
         try
             let file = FileInfo(Path.Combine(path, guid.ToString(), fileName))
 
             if File.Exists file.FullName then
                 return! Error $"File {file.Name} already exists"
 
-            return! File.WriteAllLinesAsync(file.FullName, [])
+            return! File.WriteAllLinesAsync(file.FullName, lines)
 
         with exn ->
             return! Error $"Exception writing file for {guid}: {exn.Message}"
-    }
-
-    member _.TryWriteEventsFileAsync(guid: Guid, firstRvn: uint, lastRvn: uint, lines: string list) = asyncResult {
-        try
-            let! eventsFileName = FilePersistence.getEventsFileName (Rvn firstRvn, Rvn lastRvn)
-
-            let file = FileInfo(Path.Combine(path, guid.ToString(), eventsFileName))
-
-            if File.Exists file.FullName then
-                return! Error $"File {file.Name} already exists"
-
-            return! File.WriteAllLinesAsync(file.FullName, lines)
-
-        with exn ->
-            return! Error $"Exception writing events file ({firstRvn}-{lastRvn}) for {guid}: {exn.Message}"
-    }
-
-    member _.TryWriteSnapshotFileAsync(guid: Guid, rvn: uint, lines: string list) = asyncResult {
-        try
-            let! snapshotFileName = FilePersistence.getSnapshotFileName (Rvn rvn)
-
-            let file = FileInfo(Path.Combine(path, guid.ToString(), snapshotFileName))
-
-            if File.Exists file.FullName then
-                return! Error $"File {file.Name} already exists"
-
-            return! File.WriteAllLinesAsync(file.FullName, lines)
-
-        with exn ->
-            return! Error $"Exception writing snapshot file ({rvn}) for {guid}: {exn.Message}"
     }
 
     interface IDisposable with
@@ -96,40 +69,19 @@ module FilePersistenceTests =
             |> Result.mapError (fun errors -> $"One or more error when writing empty files: {errors}")
     }
 
-    let private tryWriteEventsFilesAsync
-        (testDir: TestPersistenceDir, guid: Guid, eventsFileDetails: (uint * uint * string list) list)
-        =
-        asyncResult {
-            let! result =
-                eventsFileDetails
-                |> List.map (fun (firstRvn, lastRvn, lines) ->
-                    testDir.TryWriteEventsFileAsync(guid, firstRvn, lastRvn, lines))
-                |> Async.Parallel
+    let private tryWriteFilesAsync (testDir: TestPersistenceDir, guid: Guid, files: (string * string list) list) = asyncResult {
+        let! result =
+            files
+            |> List.map (fun (fileName, lines) -> testDir.TryWriteFileAsync(guid, fileName, lines))
+            |> Async.Parallel
 
-            return!
-                result
-                |> List.ofArray
-                |> List.sequenceResultA
-                |> Result.map (fun _ -> ())
-                |> Result.mapError (fun errors -> $"One or more error when writing events files: {errors}")
-        }
-
-    let private tryWriteSnapshotFilesAsync
-        (testDir: TestPersistenceDir, guid: Guid, snapshotFileDetails: (uint * string list) list)
-        =
-        asyncResult {
-            let! result =
-                snapshotFileDetails
-                |> List.map (fun (rvn, lines) -> testDir.TryWriteSnapshotFileAsync(guid, rvn, lines))
-                |> Async.Parallel
-
-            return!
-                result
-                |> List.ofArray
-                |> List.sequenceResultA
-                |> Result.map (fun _ -> ())
-                |> Result.mapError (fun errors -> $"One or more error when writing snapshot files: {errors}")
-        }
+        return!
+            result
+            |> List.ofArray
+            |> List.sequenceResultA
+            |> Result.map (fun _ -> ())
+            |> Result.mapError (fun errors -> $"One or more error when writing files: {errors}")
+    }
 
     let private addFileExtension fileType (fileName: string) =
         match fileType with
@@ -362,10 +314,56 @@ module FilePersistenceTests =
                     )
                 }
             ]
+            testList "getDirStatusAsync (strict mode)" [
+                // Note: Only need a couple of tests - i.e. sufficient to check that file contents are being checked - but cannot use empty files.
+                testAsync "When single non-empty events file with initial first revision" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFile =
+                        addFileExtension Events "1-1",
+                        [
+                            """["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["System","Startup"],["Json","[\"Initialized\",-1]"]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ eventsFile ])
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, true)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        EventsOnly {
+                            EventsFileName = fst eventsFile
+                            FirstRvn = Rvn 1u
+                            LastRvn = Rvn 1u
+                        }
+                    )
+                }
+                testAsync "When single non-empty snapshot file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFile =
+                        addFileExtension Snapshot "1", [ """["SnapshotLine",["Rvn",1],["Json","{\"Count\":1}"]]""" ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ snapshotFile ])
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, true)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        SnapshotOnly {
+                            SnapshotFileName = fst snapshotFile
+                            Rvn = Rvn 1u
+                        }
+                    )
+                }
+            ]
         (* TODO-TESTS:
                 -- tryDecodeEventsFileAsync...
-                -- tryDecodeSnapshotFileAsync...
-                -- getDirStatusAsync (strict mode)?... *)
+                -- tryDecodeSnapshotFileAsync... *)
         ]
 
     let private sad =
@@ -608,10 +606,46 @@ module FilePersistenceTests =
                         $"First {nameof Rvn} ({Rvn 100u}) for events file {eventsFileName2} is not contiguous with {nameof Rvn} ({Rvn 100u}) for previous snapshot file {snapshotFileName} in {testDir.PathForError guid}"
                 }
             ]
+            testList "getDirStatusAsync (strict mode)" [
+                // Note: Only need a couple of tests - i.e. sufficient to check that file contents are being checked - so can use empty files.
+                testAsync "When single empty events file with initial first revision" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFileName = addFileExtension Events "1-9"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ eventsFileName ])
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, true)
+                    }
+
+                    let errors = [ $"Events file {eventsFileName} is empty" ]
+
+                    result
+                    |> Check.isError
+                        $"One or more strict mode error for events files in {testDir.PathForError guid}: {errors}"
+                }
+                testAsync "When single empty snapshot file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFileName = addFileExtension Snapshot "1"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ snapshotFileName ])
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, true)
+                    }
+
+                    let errors = [ $"Snapshot file {snapshotFileName} is empty" ]
+
+                    result
+                    |> Check.isError
+                        $"One or more strict mode error for snapshot files in {testDir.PathForError guid}: {errors}"
+                }
+            ]
         (* TODO-TESTS:
                 -- tryDecodeEventsFileAsync...
-                -- tryDecodeSnapshotFileAsync...
-                -- getDirStatusAsync (strict mode)?... *)
+                -- tryDecodeSnapshotFileAsync... *)
         ]
 
     let tests = testList $"{nameof FilePersistence}" [ happy; sad ]
