@@ -16,7 +16,7 @@ type private FileType =
 type private TestPersistenceDir(createDirForGuid: Guid option, ?retainOnDispose) =
     let retainOnDispose = defaultArg retainOnDispose false
 
-    let path = Path.Combine($@".\testDirs", Guid.NewGuid().ToString())
+    let path = Path.Combine(@".\testDirs", Guid.NewGuid().ToString())
 
     let dir = DirectoryInfo path
 
@@ -192,7 +192,180 @@ module FilePersistenceTests =
                         }
                     )
                 }
+                testAsync "When single snapshot file with initial revision" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFileName = addFileExtension Snapshot "1"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ snapshotFileName ])
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        SnapshotOnly {
+                            SnapshotFileName = snapshotFileName
+                            Rvn = Rvn 1u
+                        }
+                    )
+                }
+                testAsync "When single snapshot file with non-initial revision" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFileName = addFileExtension Snapshot "666"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ snapshotFileName ])
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        SnapshotOnly {
+                            SnapshotFileName = snapshotFileName
+                            Rvn = Rvn 666u
+                        }
+                    )
+                }
+                testAsync "When single snapshot file with initial revision and subsequent contiguous events file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFileName = addFileExtension Snapshot "1"
+                    let eventsFileName = addFileExtension Events "2-2"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ snapshotFileName; eventsFileName ])
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        SnapshotAndEvents(
+                            {
+                                SnapshotFileName = snapshotFileName
+                                Rvn = Rvn 1u
+                            },
+                            {
+                                EventsFileName = eventsFileName
+                                FirstRvn = Rvn 2u
+                                LastRvn = Rvn 2u
+                            }
+                        )
+                    )
+                }
+                testAsync "When single snapshot file with non-initial revision and subsequent contiguous events file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFileName1 = addFileExtension Events "1-36"
+                    let snapshotFileName = addFileExtension Snapshot "36"
+                    let eventsFileName2 = addFileExtension Events "37-52"
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteEmptyFilesAsync (
+                                testDir,
+                                guid,
+                                [ eventsFileName1; snapshotFileName; eventsFileName2 ]
+                            )
+
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        SnapshotAndEvents(
+                            {
+                                SnapshotFileName = snapshotFileName
+                                Rvn = Rvn 36u
+                            },
+                            {
+                                EventsFileName = eventsFileName2
+                                FirstRvn = Rvn 37u
+                                LastRvn = Rvn 52u
+                            }
+                        )
+                    )
+                }
+                testAsync "When multiple snapshot files and no subsequent events file for last snapshot file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFileName1 = addFileExtension Events "1-36"
+                    let snapshotFileName1 = addFileExtension Snapshot "36"
+                    let eventsFileName2 = addFileExtension Events "37-52"
+                    let snapshotFileName2 = addFileExtension Snapshot "52"
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteEmptyFilesAsync (
+                                testDir,
+                                guid,
+                                [ eventsFileName1; snapshotFileName1; eventsFileName2; snapshotFileName2 ]
+                            )
+
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        SnapshotOnly {
+                            SnapshotFileName = snapshotFileName2
+                            Rvn = Rvn 52u
+                        }
+                    )
+                }
+                testAsync "When multiple snapshot files and subsequent contiguous events file for last snapshot file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFileName1 = addFileExtension Events "1-36"
+                    let snapshotFileName1 = addFileExtension Snapshot "36"
+                    let eventsFileName2 = addFileExtension Events "37-52"
+                    let snapshotFileName2 = addFileExtension Snapshot "52"
+                    let eventsFileName3 = addFileExtension Events "53-53"
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteEmptyFilesAsync (
+                                testDir,
+                                guid,
+                                [
+                                    eventsFileName1
+                                    snapshotFileName1
+                                    eventsFileName2
+                                    snapshotFileName2
+                                    eventsFileName3
+                                ]
+                            )
+
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        SnapshotAndEvents(
+                            {
+                                SnapshotFileName = snapshotFileName2
+                                Rvn = Rvn 52u
+                            },
+                            {
+                                EventsFileName = eventsFileName3
+                                FirstRvn = Rvn 53u
+                                LastRvn = Rvn 53u
+                            }
+                        )
+                    )
+                }
             ]
+        (* TODO-TESTS:
+                -- tryDecodeEventsFileAsync...
+                -- tryDecodeSnapshotFileAsync...
+                -- getDirStatusAsync (strict mode)?... *)
         ]
 
     let private sad =
@@ -235,7 +408,7 @@ module FilePersistenceTests =
 
                     result
                     |> Check.isError
-                        $"One or more file with an invalid extension in {testDir.PathForError guid}: {fileNamesWithInvalidExtensions}"
+                        $"One or more file with an invalid extension in {testDir.PathForError guid}: {fileNamesWithInvalidExtensions |> List.sort}"
                 }
                 testAsync "When events files with invalid names" {
                     let guid = Guid.NewGuid()
@@ -295,7 +468,150 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"First {nameof Rvn} ({Rvn 2u}) is not {Rvn.InitialRvn} for only events file {eventsFileName} in {testDir.PathForError guid}"
                 }
+                testAsync "When multiple events files and no snapshot files" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFileNames = [ "1-5"; "6-6" ] |> List.map (addFileExtension Events)
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, eventsFileNames)
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"There are multiple events files and no snapshot files in {testDir.PathForError guid}: {eventsFileNames |> List.sort}"
+                }
+                testAsync "When multiple snapshot files and no events files" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFileNames = [ "1"; "2" ] |> List.map (addFileExtension Snapshot)
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, snapshotFileNames)
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"There are multiple snapshot files and no events files in {testDir.PathForError guid}: {snapshotFileNames |> List.sort}"
+                }
+                testAsync "When first events file with non-initial first revision (and no previous snapshot file)" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFileName = addFileExtension Events "2-9"
+                    let snapshotFileName = addFileExtension Snapshot "10"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ eventsFileName; snapshotFileName ])
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"First {nameof Rvn} ({Rvn 2u}) is not {Rvn.InitialRvn} for first events file {eventsFileName} (and no previous snapshot file) in {testDir.PathForError guid}"
+                }
+                testAsync "When snapshot file follows snapshot file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFileName = addFileExtension Events "1-5"
+                    let snapshotFileName1 = addFileExtension Snapshot "5"
+                    let snapshotFileName2 = addFileExtension Snapshot "7"
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteEmptyFilesAsync (
+                                testDir,
+                                guid,
+                                [ eventsFileName; snapshotFileName1; snapshotFileName2 ]
+                            )
+
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Snaphot file {snapshotFileName2} follows snapshot file {snapshotFileName1} in {testDir.PathForError guid}"
+                }
+                testAsync "When events file follows events file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFileName = addFileExtension Snapshot "3"
+                    let eventsFileName1 = addFileExtension Events "4-8"
+                    let eventsFileName2 = addFileExtension Events "9-11"
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteEmptyFilesAsync (
+                                testDir,
+                                guid,
+                                [ snapshotFileName; eventsFileName1; eventsFileName2 ]
+                            )
+
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Events file {eventsFileName2} follows events file {eventsFileName1} in {testDir.PathForError guid}"
+                }
+                testAsync "When revision for snapshot file not the same as last revision for previous events file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFileName1 = addFileExtension Events "1-100"
+                    let snapshotFileName1 = addFileExtension Snapshot "100"
+                    let eventsFileName2 = addFileExtension Events "101-109"
+                    let snapshotFileName2 = addFileExtension Snapshot "111"
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteEmptyFilesAsync (
+                                testDir,
+                                guid,
+                                [ eventsFileName1; snapshotFileName1; eventsFileName2; snapshotFileName2 ]
+                            )
+
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"{nameof Rvn} ({Rvn 111u}) for snapshot file {snapshotFileName2} is not the same as last {nameof Rvn} ({Rvn 109u}) for previous events file {eventsFileName2} in {testDir.PathForError guid}"
+                }
+                testAsync "When first revision for events file not contiguous with revision for previous snapshot file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFileName1 = addFileExtension Events "1-100"
+                    let snapshotFileName = addFileExtension Snapshot "100"
+                    let eventsFileName2 = addFileExtension Events "100-109"
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteEmptyFilesAsync (
+                                testDir,
+                                guid,
+                                [ eventsFileName1; snapshotFileName; eventsFileName2 ]
+                            )
+
+                        return! FilePersistence.getDirStatusAsync (testDir.Dir, guid, false)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"First {nameof Rvn} ({Rvn 100u}) for events file {eventsFileName2} is not contiguous with {nameof Rvn} ({Rvn 100u}) for previous snapshot file {snapshotFileName} in {testDir.PathForError guid}"
+                }
             ]
+        (* TODO-TESTS:
+                -- tryDecodeEventsFileAsync...
+                -- tryDecodeSnapshotFileAsync...
+                -- getDirStatusAsync (strict mode)?... *)
         ]
 
     let tests = testList $"{nameof FilePersistence}" [ happy; sad ]

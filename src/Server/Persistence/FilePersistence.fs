@@ -11,8 +11,8 @@ open System.Collections.Concurrent
 open System.IO
 open Thoth.Json.Net
 
-(* TODO-PERSISTENCE:
-    -- Write tests for PersistenceModule functions: getEventsFileName | getSnapshotFileName | tryDecodeEventsFileAsync | tryDecodeSnapshotFileAsync | getDirStatusAsync...
+(* TODO-TESTS:
+    -- Write tests for PersistenceModule functions: tryDecodeEventsFileAsync | tryDecodeSnapshotFileAsync | getDirStatusAsync (strict mode)...
     -- Write tests for FileReaderAndWriter (via FilePersistenceFactory): ReadAllAsync | CreateFromSnapshotAsync | WriteEventAsync... *)
 
 // Note that EventsFile, EventLine, Snapshot[File|Line], DirStatus, and FilePersistence module are not private in order to facilitate unit testing.
@@ -319,12 +319,12 @@ module FilePersistence =
                 | _, [] ->
                     return!
                         Error
-                            $"There are multiple events files and no snapshot files in {pathForError}: {eventsFileNames}"
+                            $"There are multiple events files and no snapshot files in {pathForError}: {eventsFileNames |> List.ofSeq |> List.sort}"
                 | [], [ snapshotFile ] -> return! Ok(SnapshotOnly snapshotFile) // note: only snapshot file does not have to be Rvn.InitialRvn
                 | [], _ ->
                     return!
                         Error
-                            $"There are multiple snapshot files and no events files in {pathForError}: {snapshotFileNames}"
+                            $"There are multiple snapshot files and no events files in {pathForError}: {snapshotFileNames |> List.ofSeq |> List.sort}"
                 | _ ->
                     let! _ = // error if any errors for [events|snapshot] files
                         checkFiles eventsFiles snapshotFiles

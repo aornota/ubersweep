@@ -17,8 +17,7 @@ type TestPersistenceDirectory<'id, 'state, 'initEvent, 'event
     let retainOnDispose = defaultArg retainOnDispose false
     let skipCreatingDir = defaultArg skipCreatingDir false
 
-    let root =
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Guid.NewGuid().ToString())
+    let root = Path.Combine(@".\testDirs", Guid.NewGuid().ToString())
 
     let entityName: EntityName = typeof<'state>.Name
 
