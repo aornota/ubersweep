@@ -6,8 +6,17 @@ open Aornota.Ubersweep.Shared.Entities
 open Expecto
 open System
 
+type FileType =
+    | Events
+    | Snapshot
+
 [<AutoOpen>]
 module Common =
+    let addFileExtension fileType (fileName: string) =
+        match fileType with
+        | Events -> $"{fileName}.{FilePersistence.eventsFileExtension}"
+        | Snapshot -> $"{fileName}.{FilePersistence.snapshotFileExtension}"
+
     let fixedUtcNow = (FixedClock.instance :> IPersistenceClock).GetUtcNow()
 
     let userId1 = UserId.Create()
@@ -15,7 +24,6 @@ module Common =
 
     let sourceUser1 = User userId1
     let sourceUser2 = User userId2
-
     let sourceSystemTest = System "Test"
 
 [<RequireQualifiedAccess>]

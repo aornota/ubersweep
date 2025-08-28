@@ -9,10 +9,6 @@ open FsToolkit.ErrorHandling
 open System
 open System.IO
 
-type private FileType =
-    | Events
-    | Snapshot
-
 type private TestPersistenceDir(createDirForGuid: Guid option, ?retainOnDispose) =
     let retainOnDispose = defaultArg retainOnDispose false
 
@@ -31,9 +27,6 @@ type private TestPersistenceDir(createDirForGuid: Guid option, ?retainOnDispose)
 
     member _.Dir = dir
     member _.PathForError(guid: Guid) = $@"...\{dir.Name}\{guid}"
-
-    member this.TryWriteEmptyFileAsync(guid: Guid, fileName: string) =
-        this.TryWriteFileAsync(guid, fileName, [])
 
     member _.TryWriteFileAsync(guid: Guid, fileName: string, lines: string list) = asyncResult {
         try
@@ -55,20 +48,6 @@ type private TestPersistenceDir(createDirForGuid: Guid option, ?retainOnDispose)
 
 [<RequireQualifiedAccess>]
 module FilePersistenceTests =
-    let private tryWriteEmptyFilesAsync (testDir: TestPersistenceDir, guid: Guid, fileNames: string list) = asyncResult {
-        let! result =
-            fileNames
-            |> List.map (fun fileName -> testDir.TryWriteEmptyFileAsync(guid, fileName))
-            |> Async.Parallel
-
-        return!
-            result
-            |> List.ofArray
-            |> List.sequenceResultA
-            |> Result.map (fun _ -> ())
-            |> Result.mapError (fun errors -> $"One or more error when writing empty files: {errors}")
-    }
-
     let private tryWriteFilesAsync (testDir: TestPersistenceDir, guid: Guid, files: (string * string list) list) = asyncResult {
         let! result =
             files
@@ -83,10 +62,9 @@ module FilePersistenceTests =
             |> Result.mapError (fun errors -> $"One or more error when writing files: {errors}")
     }
 
-    let private addFileExtension fileType (fileName: string) =
-        match fileType with
-        | Events -> $"{fileName}.{FilePersistence.eventsFileExtension}"
-        | Snapshot -> $"{fileName}.{FilePersistence.snapshotFileExtension}"
+    let private tryWriteEmptyFilesAsync (testDir: TestPersistenceDir, guid: Guid, fileNames: string list) = asyncResult {
+        return! tryWriteFilesAsync (testDir, guid, fileNames |> List.map (fun fileName -> fileName, []))
+    }
 
     let private happy =
         testList "happy" [
@@ -104,6 +82,57 @@ module FilePersistenceTests =
                 test $"When {nameof Rvn} is valid" {
                     FilePersistence.getSnapshotFileName (Rvn 52u)
                     |> Check.isOk $"52.{FilePersistence.snapshotFileExtension}"
+                }
+            ]
+            testList "tryDecodeEventsFileAsync" [
+                testAsync "When events file is valid" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFile, eventsFileLines =
+                        {
+                            EventsFileName = addFileExtension Events "1-2"
+                            FirstRvn = Rvn 1u
+                            LastRvn = Rvn 2u
+                        },
+                        [
+                            """["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
+                            """["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
+
+                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
+                    }
+
+                    result
+                    |> Check.isOk [
+                        EventJson(Rvn 1u, fixedUtcNow, sourceSystemTest, Json """["Initialized",-1]""")
+                        EventJson(Rvn 2u, fixedUtcNow, sourceSystemTest, Json """["Incremented"]""")
+                    ]
+                }
+            ]
+            testList "tryDecodeSnapshotFileAsync" [
+                testAsync "When snapshot file is valid" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFile, snapshotFileLines =
+                        {
+                            SnapshotFileName = addFileExtension Snapshot "28"
+                            Rvn = Rvn 28u
+                        },
+                        [ """["SnapshotLine",["Rvn",28],["Json","{\"Count\":1}"]]""" ]
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteFilesAsync (testDir, guid, [ (snapshotFile.SnapshotFileName, snapshotFileLines) ])
+
+                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
+                    }
+
+                    result |> Check.isOk (SnapshotJson(Rvn 28u, Json """{"Count":1}"""))
                 }
             ]
             testList "getDirStatusAsync (not strict mode)" [
@@ -314,57 +343,6 @@ module FilePersistenceTests =
                     )
                 }
             ]
-            testList "tryDecodeEventsFileAsync" [
-                testAsync "When events file is valid" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let eventsFile, eventsFileLines =
-                        {
-                            EventsFileName = addFileExtension Events "1-2"
-                            FirstRvn = Rvn 1u
-                            LastRvn = Rvn 2u
-                        },
-                        [
-                            """["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
-                            """["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
-                        ]
-
-                    let! result = asyncResult {
-                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
-
-                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
-                    }
-
-                    result
-                    |> Check.isOk [
-                        EventJson(Rvn 1u, fixedUtcNow, sourceSystemTest, Json """["Initialized",-1]""")
-                        EventJson(Rvn 2u, fixedUtcNow, sourceSystemTest, Json """["Incremented"]""")
-                    ]
-                }
-            ]
-            testList "tryDecodeSnapshotFileAsync" [
-                testAsync "When snapshot file is valid" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let snapshotFile, snapshotFileLines =
-                        {
-                            SnapshotFileName = addFileExtension Snapshot "28"
-                            Rvn = Rvn 28u
-                        },
-                        [ """["SnapshotLine",["Rvn",28],["Json","{\"Count\":1}"]]""" ]
-
-                    let! result = asyncResult {
-                        let! _ =
-                            tryWriteFilesAsync (testDir, guid, [ (snapshotFile.SnapshotFileName, snapshotFileLines) ])
-
-                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
-                    }
-
-                    result |> Check.isOk (SnapshotJson(Rvn 28u, Json """{"Count":1}"""))
-                }
-            ]
             testList "getDirStatusAsync (strict mode)" [
                 // Note: Only need a couple of tests - i.e. sufficient to check that file contents are being checked - but cannot use empty files.
                 testAsync "When single non-empty events file with initial first revision" {
@@ -437,6 +415,216 @@ module FilePersistenceTests =
                 test $"When {nameof Rvn} is {0u}" {
                     FilePersistence.getSnapshotFileName (Rvn 0u)
                     |> Check.isError $"{nameof Rvn} for name of snapshot file must not be {Rvn 0u}"
+                }
+            ]
+            testList "tryDecodeEventsFileAsync" [
+                testAsync "When events file is empty" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFile = {
+                        EventsFileName = addFileExtension Events "1-9"
+                        FirstRvn = Rvn 1u
+                        LastRvn = Rvn 9u
+                    }
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ eventsFile.EventsFileName ])
+                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
+                    }
+
+                    result |> Check.isError $"Events file {eventsFile.EventsFileName} is empty"
+                }
+                testAsync "When expected first revision for events file differs from first event line" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFile, eventsFileLines =
+                        {
+                            EventsFileName = addFileExtension Events "7-9"
+                            FirstRvn = Rvn 7u
+                            LastRvn = Rvn 9u
+                        },
+                        [
+                            """["EventLine",["Rvn",6],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
+                            """["EventLine",["Rvn",8],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
+                            """["EventLine",["Rvn",9],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
+
+                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Expected first {eventsFile.FirstRvn} for events file {eventsFile.EventsFileName} but decoded first {nameof EventLine} is {Rvn 6u}"
+                }
+                testAsync "When events file has event line with revision not contiguous with previous event line" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFile, eventsFileLines =
+                        {
+                            EventsFileName = addFileExtension Events "7-9"
+                            FirstRvn = Rvn 7u
+                            LastRvn = Rvn 9u
+                        },
+                        [
+                            """["EventLine",["Rvn",7],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
+                            """["EventLine",["Rvn",8],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
+                            """["EventLine",["Rvn",10],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
+
+                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Events file {eventsFile.EventsFileName} has decoded {nameof EventLine} with {Rvn 10u} not contiguous with previous decoded {nameof EventLine} ({Rvn 8u})"
+                }
+                testAsync "When expected last revision for events file differs from last event line" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFile, eventsFileLines =
+                        {
+                            EventsFileName = addFileExtension Events "7-10"
+                            FirstRvn = Rvn 7u
+                            LastRvn = Rvn 10u
+                        },
+                        [
+                            """["EventLine",["Rvn",7],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
+                            """["EventLine",["Rvn",8],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
+                            """["EventLine",["Rvn",9],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
+
+                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Expected last {eventsFile.LastRvn} for events file {eventsFile.EventsFileName} but decoded last {nameof EventLine} is {Rvn 9u}"
+                }
+                testAsync "When decoding errors for events file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let eventsFile, eventsFileLines =
+                        {
+                            EventsFileName = addFileExtension Events "7-9"
+                            FirstRvn = Rvn 7u
+                            LastRvn = Rvn 9u
+                        },
+                        [
+                            """["EvontLine",["Rvn",7],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
+                            """["EventLine",["Rvn",8],"2025-08-07T15:11:33.0000000Z",["Sustem","Test"],["Json","[\"Incremented\"]"]]"""
+                            """["EventLine",["Rvn",9],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Jason","[\"Incremented\"]"]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
+
+                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
+                    }
+
+                    result
+                    |> Check.isError
+                        $"One or more decoding error for events file {eventsFile.EventsFileName}: [Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EvontLine in Aornota.Ubersweep.Server.Persistence.EventLine; Error at: `$[3]`\010The following `failure` occurred with the decoder: Cannot find case Sustem in Aornota.Ubersweep.Server.Persistence.Source; Error at: `$[4]`\010The following `failure` occurred with the decoder: Cannot find case Jason in Aornota.Ubersweep.Shared.Common.Json]"
+                }
+            ]
+            testList "tryDecodeSnapshotFileAsync" [
+                testAsync "When snapshot file is empty" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFile = {
+                        SnapshotFileName = addFileExtension Snapshot "1"
+                        Rvn = Rvn 1u
+                    }
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ snapshotFile.SnapshotFileName ])
+                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
+                    }
+
+                    result
+                    |> Check.isError $"Snapshot file {snapshotFile.SnapshotFileName} is empty"
+                }
+                testAsync "When expected revision for snapshot file differs from snapshot line" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFile, snapshotFileLines =
+                        {
+                            SnapshotFileName = addFileExtension Snapshot "28"
+                            Rvn = Rvn 28u
+                        },
+                        [ """["SnapshotLine",["Rvn",82],["Json","{\"Count\":1}"]]""" ]
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteFilesAsync (testDir, guid, [ (snapshotFile.SnapshotFileName, snapshotFileLines) ])
+
+                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Expected {snapshotFile.Rvn} for snapshot file {snapshotFile.SnapshotFileName} but decoded {nameof SnapshotLine} is {Rvn 82u}"
+                }
+                testAsync "When decoding error for snapshot file" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFile, snapshotFileLines =
+                        {
+                            SnapshotFileName = addFileExtension Snapshot "28"
+                            Rvn = Rvn 28u
+                        },
+                        [ """["SnipshotLine",["Rvn",82],["Json","{\"Count\":1}"]]""" ]
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteFilesAsync (testDir, guid, [ (snapshotFile.SnapshotFileName, snapshotFileLines) ])
+
+                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Decoding error for snapshot file {snapshotFile.SnapshotFileName}: Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case SnipshotLine in Aornota.Ubersweep.Server.Persistence.SnapshotLine"
+                }
+                testAsync "When snapshot file contains multiple lines" {
+                    let guid = Guid.NewGuid()
+                    use testDir = new TestPersistenceDir(Some guid)
+
+                    let snapshotFile, snapshotFileLines =
+                        {
+                            SnapshotFileName = addFileExtension Snapshot "28"
+                            Rvn = Rvn 28u
+                        },
+                        [
+                            """["SnapshotLine",["Rvn",28],["Json","{\"Count\":1}"]]"""
+                            """["SnapshotLine",["Rvn",29],["Json","{\"Count\":2}"]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteFilesAsync (testDir, guid, [ (snapshotFile.SnapshotFileName, snapshotFileLines) ])
+
+                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
+                    }
+
+                    result
+                    |> Check.isError $"Snapshot file {snapshotFile.SnapshotFileName} contains multiople lines"
                 }
             ]
             testList "getDirStatusAsync (not strict mode)" [
@@ -652,216 +840,6 @@ module FilePersistenceTests =
                     result
                     |> Check.isError
                         $"First {nameof Rvn} ({Rvn 100u}) for events file {eventsFileName2} is not contiguous with {nameof Rvn} ({Rvn 100u}) for previous snapshot file {snapshotFileName} in {testDir.PathForError guid}"
-                }
-            ]
-            testList "tryDecodeEventsFileAsync" [
-                testAsync "When events file is empty" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let eventsFile = {
-                        EventsFileName = addFileExtension Events "1-9"
-                        FirstRvn = Rvn 1u
-                        LastRvn = Rvn 9u
-                    }
-
-                    let! result = asyncResult {
-                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ eventsFile.EventsFileName ])
-                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
-                    }
-
-                    result |> Check.isError $"Events file {eventsFile.EventsFileName} is empty"
-                }
-                testAsync "When expected first revision for events file differs from first event line" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let eventsFile, eventsFileLines =
-                        {
-                            EventsFileName = addFileExtension Events "7-9"
-                            FirstRvn = Rvn 7u
-                            LastRvn = Rvn 9u
-                        },
-                        [
-                            """["EventLine",["Rvn",6],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
-                            """["EventLine",["Rvn",8],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
-                            """["EventLine",["Rvn",9],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
-                        ]
-
-                    let! result = asyncResult {
-                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
-
-                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
-                    }
-
-                    result
-                    |> Check.isError
-                        $"Expected first {eventsFile.FirstRvn} for events file {eventsFile.EventsFileName} but decoded first {nameof EventLine} is {Rvn 6u}"
-                }
-                testAsync "When events file has event line with revision not contiguous with previous event line" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let eventsFile, eventsFileLines =
-                        {
-                            EventsFileName = addFileExtension Events "7-9"
-                            FirstRvn = Rvn 7u
-                            LastRvn = Rvn 9u
-                        },
-                        [
-                            """["EventLine",["Rvn",7],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
-                            """["EventLine",["Rvn",8],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
-                            """["EventLine",["Rvn",10],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
-                        ]
-
-                    let! result = asyncResult {
-                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
-
-                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
-                    }
-
-                    result
-                    |> Check.isError
-                        $"Events file {eventsFile.EventsFileName} has decoded {nameof EventLine} with {Rvn 10u} not contiguous with previous decoded {nameof EventLine} ({Rvn 8u})"
-                }
-                testAsync "When expected last revision for events file differs from last event line" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let eventsFile, eventsFileLines =
-                        {
-                            EventsFileName = addFileExtension Events "7-10"
-                            FirstRvn = Rvn 7u
-                            LastRvn = Rvn 10u
-                        },
-                        [
-                            """["EventLine",["Rvn",7],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
-                            """["EventLine",["Rvn",8],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
-                            """["EventLine",["Rvn",9],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
-                        ]
-
-                    let! result = asyncResult {
-                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
-
-                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
-                    }
-
-                    result
-                    |> Check.isError
-                        $"Expected last {eventsFile.LastRvn} for events file {eventsFile.EventsFileName} but decoded last {nameof EventLine} is {Rvn 9u}"
-                }
-                testAsync "When decoding errors for events file" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let eventsFile, eventsFileLines =
-                        {
-                            EventsFileName = addFileExtension Events "7-9"
-                            FirstRvn = Rvn 7u
-                            LastRvn = Rvn 9u
-                        },
-                        [
-                            """["EvontLine",["Rvn",7],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
-                            """["EventLine",["Rvn",8],"2025-08-07T15:11:33.0000000Z",["Sustem","Test"],["Json","[\"Incremented\"]"]]"""
-                            """["EventLine",["Rvn",9],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Jason","[\"Incremented\"]"]]"""
-                        ]
-
-                    let! result = asyncResult {
-                        let! _ = tryWriteFilesAsync (testDir, guid, [ (eventsFile.EventsFileName, eventsFileLines) ])
-
-                        return! FilePersistence.tryDecodeEventsFileAsync (testDir.Dir, guid) eventsFile
-                    }
-
-                    result
-                    |> Check.isError
-                        $"One or more decoding error for events file {eventsFile.EventsFileName}: [Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case EvontLine in Aornota.Ubersweep.Server.Persistence.EventLine; Error at: `$[3]`\010The following `failure` occurred with the decoder: Cannot find case Sustem in Aornota.Ubersweep.Server.Persistence.Source; Error at: `$[4]`\010The following `failure` occurred with the decoder: Cannot find case Jason in Aornota.Ubersweep.Shared.Common.Json]"
-                }
-            ]
-            testList "tryDecodeSnapshotFileAsync" [
-                testAsync "When snapshot file is empty" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let snapshotFile = {
-                        SnapshotFileName = addFileExtension Snapshot "1"
-                        Rvn = Rvn 1u
-                    }
-
-                    let! result = asyncResult {
-                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ snapshotFile.SnapshotFileName ])
-                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
-                    }
-
-                    result
-                    |> Check.isError $"Snapshot file {snapshotFile.SnapshotFileName} is empty"
-                }
-                testAsync "When expected revision for snapshot file differs from snapshot line" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let snapshotFile, snapshotFileLines =
-                        {
-                            SnapshotFileName = addFileExtension Snapshot "28"
-                            Rvn = Rvn 28u
-                        },
-                        [ """["SnapshotLine",["Rvn",82],["Json","{\"Count\":1}"]]""" ]
-
-                    let! result = asyncResult {
-                        let! _ =
-                            tryWriteFilesAsync (testDir, guid, [ (snapshotFile.SnapshotFileName, snapshotFileLines) ])
-
-                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
-                    }
-
-                    result
-                    |> Check.isError
-                        $"Expected {snapshotFile.Rvn} for snapshot file {snapshotFile.SnapshotFileName} but decoded {nameof SnapshotLine} is {Rvn 82u}"
-                }
-                testAsync "When decoding error for snapshot file" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let snapshotFile, snapshotFileLines =
-                        {
-                            SnapshotFileName = addFileExtension Snapshot "28"
-                            Rvn = Rvn 28u
-                        },
-                        [ """["SnipshotLine",["Rvn",82],["Json","{\"Count\":1}"]]""" ]
-
-                    let! result = asyncResult {
-                        let! _ =
-                            tryWriteFilesAsync (testDir, guid, [ (snapshotFile.SnapshotFileName, snapshotFileLines) ])
-
-                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
-                    }
-
-                    result
-                    |> Check.isError
-                        $"Decoding error for snapshot file {snapshotFile.SnapshotFileName}: Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case SnipshotLine in Aornota.Ubersweep.Server.Persistence.SnapshotLine"
-                }
-                testAsync "When snapshot file contains multiple lines" {
-                    let guid = Guid.NewGuid()
-                    use testDir = new TestPersistenceDir(Some guid)
-
-                    let snapshotFile, snapshotFileLines =
-                        {
-                            SnapshotFileName = addFileExtension Snapshot "28"
-                            Rvn = Rvn 28u
-                        },
-                        [
-                            """["SnapshotLine",["Rvn",28],["Json","{\"Count\":1}"]]"""
-                            """["SnapshotLine",["Rvn",29],["Json","{\"Count\":2}"]]"""
-                        ]
-
-                    let! result = asyncResult {
-                        let! _ =
-                            tryWriteFilesAsync (testDir, guid, [ (snapshotFile.SnapshotFileName, snapshotFileLines) ])
-
-                        return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
-                    }
-
-                    result
-                    |> Check.isError $"Snapshot file {snapshotFile.SnapshotFileName} contains multiople lines"
                 }
             ]
             testList "getDirStatusAsync (strict mode)" [
