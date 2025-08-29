@@ -79,7 +79,9 @@ type TestPersistenceDir<'id, 'state, 'initEvent, 'event
 
             let file = FileInfo path
 
-            if File.Exists file.FullName then
+            if not (Directory.Exists file.Directory.FullName) then
+                Directory.CreateDirectory file.Directory.FullName |> ignore
+            else if File.Exists file.FullName then
                 return! Error $"File {file.Name} already exists"
 
             return! File.WriteAllLinesAsync(file.FullName, lines)
@@ -136,17 +138,71 @@ module FilePersistenceFactoryTests =
                 |> Result.mapError (fun errors -> $"One or more error when writing files: {errors}")
         }
 
+    let private tryWriteEmptyFilesAsync
+        (testDir: TestPersistenceDir<'id, 'state, 'initEvent, 'event>, guid: Guid, fileNames: string list)
+        =
+        asyncResult { return! tryWriteFilesAsync (testDir, guid, fileNames |> List.map (fun fileName -> fileName, [])) }
+
+    let private partitionName = "2026"
+
     let private happy =
         testList "happy" [
             testList "ReadAllAsync" [
-            (* TODO-TESTS:
-            *)
+                // Note: Use partition for these.
+                (* TODO-TESTS:
+                *)
+                testAsync "No Guid directories exist" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let! result = asyncResult { return! testDir.Reader.ReadAllAsync() }
+
+                    result |> Check.isOk []
+                }
+                testAsync "Single Guid directory with single events file" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let eventsFile =
+                        addFileExtension Events "1-2",
+                        [
+                            """["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
+                            """["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","\"Incremented\""]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ eventsFile ])
+                        return! testDir.Reader.ReadAllAsync()
+                    }
+
+                    result
+                    |> Check.isOk [
+                        guid,
+                        NonEmptyList<Entry'>
+                            .Create(
+                                EventJson(Rvn 1u, fixedUtcNow, sourceSystemTest, (Initialized -1 :> IEvent).EventJson),
+                                [
+                                    EventJson(Rvn 2u, fixedUtcNow, sourceSystemTest, (Incremented :> IEvent).EventJson)
+                                ]
+                            )
+                    ]
+                }
             ]
             testList "CreateFromSnapshotAsync" [
+            // Note: Use partition for these.
             (* TODO-TESTS:
             *)
             ]
             testList "WriteEventAsync" [
+            // Note: Do not use partition for these.
             (* TODO-TESTS:
             *)
             ]
@@ -155,10 +211,8 @@ module FilePersistenceFactoryTests =
     let private sad =
         testList "sad" [
             testList "ReadAllAsync" [
-                (* TODO-TESTS:
-                -- [ $"Directory does not exist when reading {guid} for {pathForError}" is not possible when tryReadAsync only called by tryReadAll? ]
-                -- [ $"Directory is empty when reading {guid} for {pathForError}" is not possible when tryReadAsync only called by tryReadAll? ] *)
-                testAsync "When files exist when reading all" {
+                // Note: Cannot cause "Directory does not exist when reading {guid} for {pathForError}" error in tryReadAsync as this is only called by tryReadAll for Guid directories that do exist.
+                testAsync "Files exist" {
                     use testDir =
                         new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
@@ -174,7 +228,7 @@ module FilePersistenceFactoryTests =
                     |> Check.isError
                         $"Files exist when reading all for {testDir.PathForError}: {[ fileName2; fileName1 ] |> List.sort}"
                 }
-                testAsync "When non-Guid directories exist when reading all" {
+                testAsync "Non-Guid directories exist" {
                     use testDir =
                         new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
@@ -190,17 +244,166 @@ module FilePersistenceFactoryTests =
                     |> Check.isError
                         $"Non-{nameof Guid} directories exist when reading all for {testDir.PathForError}: {[ dir1; dir2 ] |> List.sort}"
                 }
+                testAsync "Empty Guid directories exist" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
+                    let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        Directory.CreateDirectory(Path.Combine(testDir.Dir.FullName, $"{guid1}"))
+                        |> ignore
+
+                        Directory.CreateDirectory(Path.Combine(testDir.Dir.FullName, $"{guid2}"))
+                        |> ignore
+
+                        return! testDir.Reader.ReadAllAsync()
+                    }
+
+                    let errors =
+                        [ guid1; guid2 ]
+                        |> List.sort
+                        |> List.map (fun guid -> $"Directory is empty when reading {guid} for {testDir.PathForError}")
+
+                    result
+                    |> Check.isError $"One or more error when reading all for {testDir.PathForError}: {errors}"
+                }
             ]
             testList "CreateFromSnapshotAsync" [
-            // TODO-TESTS: $"Directory for {guid} is not empty when creating from snapshot in {pathForError}"
+                testAsync "Guid directory is not empty" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
+                    let guid = Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        let! _ =
+                            tryWriteEmptyFilesAsync (
+                                testDir,
+                                guid,
+                                [ addFileExtension Events "1-36"; addFileExtension Snapshot "36" ]
+                            )
+
+                        return! testDir.Writer.CreateFromSnapshotAsync(guid, Rvn.InitialRvn, Json """{"Count":666}""")
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Directory for {guid} contains events files and/or snapshot files when creating from snapshot in {testDir.PathForError}"
+                }
             ]
             testList "WriteEventAsync" [
-            (* TODO-TESTS:
-                -- $"Directory for {guid} is enpty but {rvn} is not {Rvn.InitialRvn} when writing event for {guid} in {pathForError}"
-                -- [ $"Strict mode error when writing event for {guid} for {pathForError}: {error}", e.g. if the last EventLine in the events file is not eventsFile.LastRvn? ]
-                -- $"{rvn} is inconsistent with latest {nameof Rvn} ({eventsFile.LastRvn}) for events file {eventsFile.EventsFileName} when writing event for {guid} in {pathForError}"
-                -- [ $"Strict mode error when writing event for {guid} for {pathForError}: {error}", e.g. if the only SnapshotLine in the latest snapshot file is not snapshotFile.Rvn? ]
-                -- $"{rvn} is inconsistent with {nameof Rvn} ({snapshotFile.Rvn}) for latest snapshot file {snapshotFile.SnapshotFileName} when writing event for {guid} in {pathForError}" *)
+                testAsync "Guid directory does not exist but revision is not initial revision" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
+                    let guid = Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        return! testDir.Writer.WriteEventAsync(guid, Rvn 5u, sourceUser1, Incremented, None)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Directory for {guid} does not exist but {Rvn 5u} is not {Rvn.InitialRvn} when writing event for {guid} in {testDir.PathForError}"
+                }
+                testAsync "Guid directory is empty but revision is not initial revision" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
+                    let guid = Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        Directory.CreateDirectory(Path.Combine(testDir.Dir.FullName, $"{guid}"))
+                        |> ignore
+
+                        return! testDir.Writer.WriteEventAsync(guid, Rvn 5u, sourceUser1, Incremented, None)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"Directory for {guid} is empty but {Rvn 5u} is not {Rvn.InitialRvn} when writing event for {guid} in {testDir.PathForError}"
+                }
+                testAsync "Revision is not contiguous with latest revision for latest events file" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
+                    let guid = Guid.NewGuid()
+
+                    let eventsFileName = addFileExtension Events "1-6"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ eventsFileName ])
+                        return! testDir.Writer.WriteEventAsync(guid, Rvn 8u, sourceUser1, Incremented, None)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"{Rvn 8u} is not contiguous with latest {nameof Rvn} ({Rvn 6u}) for latest events file {eventsFileName} when writing event for {guid} in {testDir.PathForError}"
+                }
+                testAsync "Revision is not contiguous with revision for latest snapshot file" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
+                    let guid = Guid.NewGuid()
+
+                    let snapshotFlleName = addFileExtension Snapshot "1"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ snapshotFlleName ])
+                        return! testDir.Writer.WriteEventAsync(guid, Rvn 1u, sourceUser1, Initialized 0, None)
+                    }
+
+                    result
+                    |> Check.isError
+                        $"{Rvn 1u} is not contiguous with {nameof Rvn} ({Rvn 1u}) for latest snapshot file {snapshotFlleName} when writing event for {guid} in {testDir.PathForError}"
+                }
+                testAsync "Strict mode error for single empty events file (with initial first revision)" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            None,
+                            None,
+                            strictMode = true
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let eventsFileName = addFileExtension Events "1-4"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ eventsFileName ])
+                        return! testDir.Writer.WriteEventAsync(guid, Rvn 5u, sourceUser1, Incremented, None)
+                    }
+
+                    let error = $"Events file {eventsFileName} is empty"
+
+                    result
+                    |> Check.isError
+                        $"Strict mode error when writing event for {guid} for {testDir.PathForError}: {error}"
+                }
+                testAsync "Strict mode error for single empty snapshot file" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            None,
+                            None,
+                            strictMode = true
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let snapshotFlleName = addFileExtension Snapshot "48"
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteEmptyFilesAsync (testDir, guid, [ snapshotFlleName ])
+                        return! testDir.Writer.WriteEventAsync(guid, Rvn 49u, sourceUser1, Incremented, None)
+                    }
+
+                    let error = $"Snapshot file {snapshotFlleName} is empty"
+
+                    result
+                    |> Check.isError
+                        $"Strict mode error when writing event for {guid} for {testDir.PathForError}: {error}"
+                }
             ]
         ]
 

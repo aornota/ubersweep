@@ -14,7 +14,7 @@ open System
 module EntityHelperTests =
     let private happy =
         testList "happy" [
-            test "From single event entry" {
+            test "Create from single event entry" {
                 let helper = CounterEventHelper()
                 let guid = Guid.NewGuid()
 
@@ -38,7 +38,7 @@ module EntityHelperTests =
                     }
                 )
             }
-            test "From multiple event entries" {
+            test "Create from multiple event entries" {
                 let helper = CounterEventHelper()
                 let guid = Guid.NewGuid()
 
@@ -65,7 +65,7 @@ module EntityHelperTests =
                     }
                 )
             }
-            test "From multiple entries with snapshot" {
+            test "Create from multiple entries with snapshot" {
                 let helper = CounterEventHelper()
                 let guid = Guid.NewGuid()
 
@@ -95,7 +95,7 @@ module EntityHelperTests =
 
     let private sad =
         testList "sad" [
-            test "From entries when subsequent entries contain snapshot" {
+            test "Create from entries when subsequent entries contain snapshot" {
                 let helper = CounterEventHelper()
                 let guid = Guid.NewGuid()
 

@@ -1,5 +1,6 @@
 namespace Aornota.Ubersweep.Tests.Server.Persistence
 
+open Aornota.Ubersweep.Server.Common
 open Aornota.Ubersweep.Server.Persistence
 open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Tests.Server.Common
@@ -30,7 +31,9 @@ type private TestSimplePersistenceDir(createDirForGuid: Guid option, ?retainOnDi
         try
             let file = FileInfo(Path.Combine(dir.FullName, $"{guid}", fileName))
 
-            if File.Exists file.FullName then
+            if not (Directory.Exists file.Directory.FullName) then
+                Directory.CreateDirectory file.Directory.FullName |> ignore
+            else if File.Exists file.FullName then
                 return! Error $"File {file.Name} already exists"
 
             return! File.WriteAllLinesAsync(file.FullName, lines)
@@ -67,23 +70,23 @@ module FilePersistenceTests =
     let private happy =
         testList "happy" [
             testList "getEventsFileName" [
-                test $"When last {nameof Rvn} equals first {nameof Rvn}" {
+                test $"Last revision equals first revision" {
                     FilePersistence.getEventsFileName (Rvn 1u, Rvn 1u)
                     |> Check.isOk $"1-1.{FilePersistence.eventsFileExtension}"
                 }
-                test $"When last {nameof Rvn} is greater than first {nameof Rvn}" {
+                test $"Last revision is greater than first revision" {
                     FilePersistence.getEventsFileName (Rvn 66u, Rvn 69u)
                     |> Check.isOk $"66-69.{FilePersistence.eventsFileExtension}"
                 }
             ]
             testList "getSnapshotFileName" [
-                test $"When {nameof Rvn} is valid" {
+                test $"Revision is valid" {
                     FilePersistence.getSnapshotFileName (Rvn 52u)
                     |> Check.isOk $"52.{FilePersistence.snapshotFileExtension}"
                 }
             ]
             testList "tryDecodeEventsFileAsync" [
-                testAsync "When events file is valid" {
+                testAsync "Events file is valid" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -95,7 +98,7 @@ module FilePersistenceTests =
                         },
                         [
                             """["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
-                            """["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Incremented\"]"]]"""
+                            """["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","\"Incremented\""]]"""
                         ]
 
                     let! result = asyncResult {
@@ -106,13 +109,13 @@ module FilePersistenceTests =
 
                     result
                     |> Check.isOk [
-                        EventJson(Rvn 1u, fixedUtcNow, sourceSystemTest, Json """["Initialized",-1]""")
-                        EventJson(Rvn 2u, fixedUtcNow, sourceSystemTest, Json """["Incremented"]""")
+                        EventJson(Rvn 1u, fixedUtcNow, sourceSystemTest, (Initialized -1 :> IEvent).EventJson)
+                        EventJson(Rvn 2u, fixedUtcNow, sourceSystemTest, (Incremented :> IEvent).EventJson)
                     ]
                 }
             ]
             testList "tryDecodeSnapshotFileAsync" [
-                testAsync "When snapshot file is valid" {
+                testAsync "Snapshot file is valid" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -130,12 +133,13 @@ module FilePersistenceTests =
                         return! FilePersistence.tryDecodeSnapshotFileAsync (testDir.Dir, guid) snapshotFile
                     }
 
-                    result |> Check.isOk (SnapshotJson(Rvn 28u, Json """{"Count":1}"""))
+                    result
+                    |> Check.isOk (SnapshotJson(Rvn 28u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson))
                 }
             ]
             testList "getDirStatusAsync (not strict mode)" [
                 // Note: Can use empty files since not strict mode.
-                testAsync "When directory for Guid does not exist" {
+                testAsync "Directory for Guid does not exist" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(None)
 
@@ -143,7 +147,7 @@ module FilePersistenceTests =
 
                     result |> Check.isOk DoesNotExist
                 }
-                testAsync "When directory for Guid is empty" {
+                testAsync "Directory for Guid is empty" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -151,7 +155,7 @@ module FilePersistenceTests =
 
                     result |> Check.isOk Empty
                 }
-                testAsync "When single events file with initial first revision" {
+                testAsync "Single events file with initial first revision" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -171,7 +175,7 @@ module FilePersistenceTests =
                         }
                     )
                 }
-                testAsync "When single snapshot file with initial revision" {
+                testAsync "Single snapshot file with initial revision" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -190,7 +194,7 @@ module FilePersistenceTests =
                         }
                     )
                 }
-                testAsync "When single snapshot file with non-initial revision" {
+                testAsync "Single snapshot file with non-initial revision" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -209,7 +213,7 @@ module FilePersistenceTests =
                         }
                     )
                 }
-                testAsync "When single snapshot file with initial revision and subsequent contiguous events file" {
+                testAsync "Single snapshot file with initial revision and subsequent contiguous events file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -236,7 +240,7 @@ module FilePersistenceTests =
                         )
                     )
                 }
-                testAsync "When single snapshot file with non-initial revision and subsequent contiguous events file" {
+                testAsync "Single snapshot file with non-initial revision and subsequent contiguous events file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -270,7 +274,7 @@ module FilePersistenceTests =
                         )
                     )
                 }
-                testAsync "When multiple snapshot files and no subsequent events file for last snapshot file" {
+                testAsync "Multiple snapshot files and no subsequent events file for last snapshot file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -298,7 +302,7 @@ module FilePersistenceTests =
                         }
                     )
                 }
-                testAsync "When multiple snapshot files and subsequent contiguous events file for last snapshot file" {
+                testAsync "Multiple snapshot files and subsequent contiguous events file for last snapshot file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -343,7 +347,7 @@ module FilePersistenceTests =
             ]
             testList "getDirStatusAsync (strict mode)" [
                 // Note: Only need a couple of tests - i.e. sufficient to check that file contents are being checked - but cannot use empty files.
-                testAsync "When single non-empty events file with initial first revision" {
+                testAsync "Single non-empty events file with initial first revision" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -367,7 +371,7 @@ module FilePersistenceTests =
                         }
                     )
                 }
-                testAsync "When single non-empty snapshot file" {
+                testAsync "Single non-empty snapshot file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -393,15 +397,15 @@ module FilePersistenceTests =
     let private sad =
         testList "sad" [
             testList "getEventsFileName" [
-                test $"When first {nameof Rvn} is {0u}" {
+                test "First revision is 0u" {
                     FilePersistence.getEventsFileName (Rvn 0u, Rvn 1u)
                     |> Check.isError $"First {nameof Rvn} for name of events file must not be {Rvn 0u}"
                 }
-                test $"When last {nameof Rvn} is {0u}" {
+                test "Last revision is 0u" {
                     FilePersistence.getEventsFileName (Rvn 1u, Rvn 0u)
                     |> Check.isError $"Last {nameof Rvn} for name of events file must not be {Rvn 0u}"
                 }
-                test $"When first {nameof Rvn} is greater than last {nameof Rvn}" {
+                test "Last revision is less than first revision" {
                     let first, last = 69u, 66u
 
                     FilePersistence.getEventsFileName (Rvn first, Rvn last)
@@ -410,13 +414,13 @@ module FilePersistenceTests =
                 }
             ]
             testList "getSnapshotFileName" [
-                test $"When {nameof Rvn} is {0u}" {
+                test "Revision is 0u" {
                     FilePersistence.getSnapshotFileName (Rvn 0u)
                     |> Check.isError $"{nameof Rvn} for name of snapshot file must not be {Rvn 0u}"
                 }
             ]
             testList "tryDecodeEventsFileAsync" [
-                testAsync "When events file is empty" {
+                testAsync "Events file is empty" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -433,7 +437,7 @@ module FilePersistenceTests =
 
                     result |> Check.isError $"Events file {eventsFile.EventsFileName} is empty"
                 }
-                testAsync "When expected first revision for events file differs from first event line" {
+                testAsync "Expected first revision for events file differs from first event line" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -459,7 +463,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"Expected first {eventsFile.FirstRvn} for events file {eventsFile.EventsFileName} but decoded first {nameof EventLine} is {Rvn 6u}"
                 }
-                testAsync "When events file has event line with revision not contiguous with previous event line" {
+                testAsync "Events file has event line with revision not contiguous with previous event line" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -485,7 +489,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"Events file {eventsFile.EventsFileName} has decoded {nameof EventLine} with {Rvn 10u} not contiguous with previous decoded {nameof EventLine} ({Rvn 8u})"
                 }
-                testAsync "When expected last revision for events file differs from last event line" {
+                testAsync "Expected last revision for events file differs from last event line" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -511,7 +515,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"Expected last {eventsFile.LastRvn} for events file {eventsFile.EventsFileName} but decoded last {nameof EventLine} is {Rvn 9u}"
                 }
-                testAsync "When decoding errors for events file" {
+                testAsync "Decoding errors for events file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -539,7 +543,7 @@ module FilePersistenceTests =
                 }
             ]
             testList "tryDecodeSnapshotFileAsync" [
-                testAsync "When snapshot file is empty" {
+                testAsync "Snapshot file is empty" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -556,7 +560,7 @@ module FilePersistenceTests =
                     result
                     |> Check.isError $"Snapshot file {snapshotFile.SnapshotFileName} is empty"
                 }
-                testAsync "When expected revision for snapshot file differs from snapshot line" {
+                testAsync "Expected revision for snapshot file differs from snapshot line" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -578,7 +582,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"Expected {snapshotFile.Rvn} for snapshot file {snapshotFile.SnapshotFileName} but decoded {nameof SnapshotLine} is {Rvn 82u}"
                 }
-                testAsync "When decoding error for snapshot file" {
+                testAsync "Decoding error for snapshot file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -600,7 +604,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"Decoding error for snapshot file {snapshotFile.SnapshotFileName}: Error at: `$`\010The following `failure` occurred with the decoder: Cannot find case SnipshotLine in Aornota.Ubersweep.Server.Persistence.SnapshotLine"
                 }
-                testAsync "When snapshot file contains multiple lines" {
+                testAsync "Snapshot file contains multiple lines" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -627,7 +631,7 @@ module FilePersistenceTests =
             ]
             testList "getDirStatusAsync (not strict mode)" [
                 // Note: Can use empty files since not strict mode.
-                testAsync "When files with invalid extensions" {
+                testAsync "Files with invalid extensions" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -642,7 +646,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"One or more file with an invalid extension in {testDir.PathForError guid}: {fileNamesWithInvalidExtensions |> List.sort}"
                 }
-                testAsync "When events files with invalid names" {
+                testAsync "Events files with invalid names" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -664,7 +668,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"One or more events file with an invalid name in {testDir.PathForError guid}: {expectedErrors}"
                 }
-                testAsync "When snapshot files with invalid names" {
+                testAsync "Snapshot files with invalid names" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -685,7 +689,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"One or more snapshot file with an invalid name in {testDir.PathForError guid}: {expectedErrors}"
                 }
-                testAsync "When single events file with non-initial first revision" {
+                testAsync "Single events file with non-initial first revision" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -700,7 +704,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"First {nameof Rvn} ({Rvn 2u}) is not {Rvn.InitialRvn} for only events file {eventsFileName} in {testDir.PathForError guid}"
                 }
-                testAsync "When multiple events files and no snapshot files" {
+                testAsync "Multiple events files and no snapshot files" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -715,7 +719,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"There are multiple events files and no snapshot files in {testDir.PathForError guid}: {eventsFileNames |> List.sort}"
                 }
-                testAsync "When multiple snapshot files and no events files" {
+                testAsync "Multiple snapshot files and no events files" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -730,7 +734,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"There are multiple snapshot files and no events files in {testDir.PathForError guid}: {snapshotFileNames |> List.sort}"
                 }
-                testAsync "When first events file with non-initial first revision (and no previous snapshot file)" {
+                testAsync "First events file with non-initial first revision (and no previous snapshot file)" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -746,7 +750,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"First {nameof Rvn} ({Rvn 2u}) is not {Rvn.InitialRvn} for first events file {eventsFileName} (and no previous snapshot file) in {testDir.PathForError guid}"
                 }
-                testAsync "When snapshot file follows snapshot file" {
+                testAsync "Snapshot file follows snapshot file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -769,7 +773,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"Snaphot file {snapshotFileName2} follows snapshot file {snapshotFileName1} in {testDir.PathForError guid}"
                 }
-                testAsync "When events file follows events file" {
+                testAsync "Events file follows events file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -792,7 +796,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"Events file {eventsFileName2} follows events file {eventsFileName1} in {testDir.PathForError guid}"
                 }
-                testAsync "When revision for snapshot file not the same as last revision for previous events file" {
+                testAsync "Revision for snapshot file not the same as last revision for previous events file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -816,7 +820,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"{nameof Rvn} ({Rvn 111u}) for snapshot file {snapshotFileName2} is not the same as last {nameof Rvn} ({Rvn 109u}) for previous events file {eventsFileName2} in {testDir.PathForError guid}"
                 }
-                testAsync "When first revision for events file not contiguous with revision for previous snapshot file" {
+                testAsync "First revision for events file not contiguous with revision for previous snapshot file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -842,7 +846,7 @@ module FilePersistenceTests =
             ]
             testList "getDirStatusAsync (strict mode)" [
                 // Note: Only need a couple of tests - i.e. sufficient to check that file contents are being checked - so can use empty files.
-                testAsync "When single empty events file with initial first revision" {
+                testAsync "Single empty events file (with initial first revision)" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 
@@ -859,7 +863,7 @@ module FilePersistenceTests =
                     |> Check.isError
                         $"One or more strict mode error for events files in {testDir.PathForError guid}: {errors}"
                 }
-                testAsync "When single empty snapshot file" {
+                testAsync "Single empty snapshot file" {
                     let guid = Guid.NewGuid()
                     use testDir = new TestSimplePersistenceDir(Some guid)
 

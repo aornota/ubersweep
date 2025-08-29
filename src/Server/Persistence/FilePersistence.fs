@@ -493,7 +493,8 @@ type private FileReaderAndWriter
                 | EventsOnly _
                 | SnapshotOnly _
                 | SnapshotAndEvents _ ->
-                    Error $"Directory for {guid} is not empty when creating from snapshot in {pathForError}"
+                    Error
+                        $"Directory for {guid} contains events files and/or snapshot files when creating from snapshot in {pathForError}"
 
             let pathForGuid = Path.Combine(path, $"{guid}")
 
@@ -522,14 +523,20 @@ type private FileReaderAndWriter
 
             let! appendToEventsFile = async {
                 match dirStatus with
-                | DoesNotExist
+                | DoesNotExist ->
+                    if rvn = Rvn.InitialRvn then
+                        return Ok None
+                    else
+                        return
+                            Error
+                                $"Directory for {guid} does not exist but {rvn} is not {Rvn.InitialRvn} when writing event for {guid} in {pathForError}"
                 | Empty ->
                     if rvn = Rvn.InitialRvn then
                         return Ok None
                     else
                         return
                             Error
-                                $"Directory for {guid} is enpty but {rvn} is not {Rvn.InitialRvn} when writing event for {guid} in {pathForError}"
+                                $"Directory for {guid} is empty but {rvn} is not {Rvn.InitialRvn} when writing event for {guid} in {pathForError}"
                 | EventsOnly eventsFile
                 | SnapshotAndEvents(_, eventsFile) ->
                     if rvn = eventsFile.LastRvn.NextRvn then
@@ -547,7 +554,7 @@ type private FileReaderAndWriter
                     else
                         return
                             Error
-                                $"{rvn} is inconsistent with latest {nameof Rvn} ({eventsFile.LastRvn}) for events file {eventsFile.EventsFileName} when writing event for {guid} in {pathForError}"
+                                $"{rvn} is not contiguous with latest {nameof Rvn} ({eventsFile.LastRvn}) for latest events file {eventsFile.EventsFileName} when writing event for {guid} in {pathForError}"
                 | SnapshotOnly snapshotFile ->
                     if rvn = snapshotFile.Rvn.NextRvn then
                         if strictMode then
@@ -565,7 +572,7 @@ type private FileReaderAndWriter
                     else
                         return
                             Error
-                                $"{rvn} is inconsistent with {nameof Rvn} ({snapshotFile.Rvn}) for latest snapshot file {snapshotFile.SnapshotFileName} when writing event for {guid} in {pathForError}"
+                                $"{rvn} is not contiguous with {nameof Rvn} ({snapshotFile.Rvn}) for latest snapshot file {snapshotFile.SnapshotFileName} when writing event for {guid} in {pathForError}"
             }
 
             let pathForGuid = Path.Combine(path, $"{guid}")
