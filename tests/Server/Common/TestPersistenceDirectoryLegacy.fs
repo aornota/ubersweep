@@ -11,13 +11,13 @@ open Serilog
 open System
 open System.IO
 
-type TestPersistenceDirectory<'id, 'state, 'initEvent, 'event
+type TestPersistenceDirectoryLegacy<'id, 'state, 'initEvent, 'event
     when 'id :> IId and 'state :> IState<'state, 'event> and 'initEvent :> IEvent and 'event :> IEvent>
     (partitionName: PartitionName option, snapshotFrequency: uint option, ?retainOnDispose, ?skipCreatingDir) =
     let retainOnDispose = defaultArg retainOnDispose false
     let skipCreatingDir = defaultArg skipCreatingDir false
 
-    let root = Path.Combine(@".\testDirs", Guid.NewGuid().ToString())
+    let root = Path.Combine(@".\testDirs", $"{Guid.NewGuid()}")
 
     let entityName: EntityName = typeof<'state>.Name
 
@@ -97,7 +97,7 @@ type TestPersistenceDirectory<'id, 'state, 'initEvent, 'event
     }
 
     member this.TryWriteAllLinesAsync(guid: Guid, lines) =
-        this.TryWriteAllLinesAsync(guid.ToString(), lines)
+        this.TryWriteAllLinesAsync($"{guid}", lines)
 
     interface IDisposable with
         member _.Dispose() : unit =

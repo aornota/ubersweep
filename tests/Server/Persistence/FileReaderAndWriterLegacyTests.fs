@@ -17,7 +17,7 @@ module FileReaderAndWriterLegacyTests =
             guid,
             initCommandPair,
             commandsPairs,
-            testDir: TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>
+            testDir: TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>
         ) =
         asyncResult {
             let rec apply commandsPairs counter = asyncResult {
@@ -40,7 +40,7 @@ module FileReaderAndWriterLegacyTests =
         testList "happy" [
             testAsync "Read (initial event entry) with no partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -67,7 +67,10 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read (multiple event entries) with partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        Some "2026",
+                        None
+                    )
 
                 let guid = Guid.NewGuid()
 
@@ -102,7 +105,10 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read (multiple entries with snapshot) with no partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, Some 3u)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        None,
+                        Some 3u
+                    )
 
                 let guid = Guid.NewGuid()
 
@@ -136,7 +142,10 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read (initial snapshot entry) with partitiion" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        Some "2026",
+                        None
+                    )
 
                 let guid = Guid.NewGuid()
 
@@ -167,7 +176,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read (initial snapshot entry and subsequent event) with no partitiion" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -198,7 +207,10 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all (no files) with partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        Some "2026",
+                        None
+                    )
 
                 let! result = asyncResult { return! testDir.ReadAllAsync() }
 
@@ -208,7 +220,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all (initial event entry) with no partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -242,7 +254,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all (multiple event entries; multiple entries with snapshot) with partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
                         Some "2026",
                         Some 3u
                     )
@@ -301,7 +313,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all (initial snapshot entry; initial snapshot entry and subsequent event) with no partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid1 = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guid2 = Guid.NewGuid()
@@ -355,7 +367,10 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Create from snapshot with partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        Some "2026",
+                        None
+                    )
 
                 let guid = Guid.NewGuid()
 
@@ -374,7 +389,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Write event (initial event entry) with no partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -396,7 +411,10 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Write event (multiple event entries) with partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(Some "2026", None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        Some "2026",
+                        None
+                    )
 
                 let guid = Guid.NewGuid()
 
@@ -423,7 +441,10 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Write event (initial event entry; multiple entries with snapshot) with no partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, Some 3u)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        None,
+                        Some 3u
+                    )
 
                 let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
 
@@ -468,7 +489,7 @@ module FileReaderAndWriterLegacyTests =
         testList "sad" [
             testAsync "Read when file does not exist" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -484,7 +505,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read when file exists but is empty" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -503,7 +524,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read when at least one entry caused a deserialization error" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -529,7 +550,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read when event revision inconsistent with previous entry revision" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -556,7 +577,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read when snapshot revision not equal to previous event revision" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -583,7 +604,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read when snapshot but previous entry was snapshot" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -611,7 +632,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all when at least one file with non-Guid name exists" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let name = "rogue"
 
@@ -632,7 +653,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all when error creating directory" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
                         Some @"par|tition",
                         None,
                         skipCreatingDir = true
@@ -652,7 +673,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all when empty file exists" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
@@ -692,7 +713,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all when file exists for which at least one entry caused a deserialization error" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
@@ -739,7 +760,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all when file exists with event revision inconsistent with previous entry revision" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
@@ -786,7 +807,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all when file exists with snapshot revision not equal to previous event revision" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
@@ -834,7 +855,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Read all when file exists with snapshot but previous entry was snapshot" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guidOk = Guid.Empty // use empty Guid to ensure deterministic ordering of result
                 let guidError = Guid.NewGuid()
@@ -883,7 +904,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Create from snapshot when file already exists" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -903,7 +924,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Write event (initial revision) when file already exists" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -924,7 +945,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Write event (non-initial revision) when file does not exist" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -942,7 +963,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Write event (non-initial revision) when file exists but is empty" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -962,7 +983,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Write event when revision inconsistent with previous entry revision" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -988,7 +1009,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Write event when deserialization error for last entry" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let guid = Guid.NewGuid()
 
@@ -1029,7 +1050,7 @@ module FileReaderAndWriterLegacyTests =
         testList "integration" [
             testAsync "Write multiple events (without snapshots) and read (separately) with no partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
                 let! result = asyncResult {
                     let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
@@ -1095,7 +1116,7 @@ module FileReaderAndWriterLegacyTests =
             }
             testAsync "Write multiple events (with snapshots) and read (all) with partition" {
                 use testDir =
-                    new TestPersistenceDirectory<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                    new TestPersistenceDirectoryLegacy<CounterId, Counter, CounterInitEvent, CounterEvent>(
                         Some "2026",
                         Some 3u
                     )

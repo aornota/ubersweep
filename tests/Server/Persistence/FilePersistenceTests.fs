@@ -12,16 +12,14 @@ open System.IO
 type private TestSimplePersistenceDir(createDirForGuid: Guid option, ?retainOnDispose) =
     let retainOnDispose = defaultArg retainOnDispose false
 
-    let path = Path.Combine(@".\testDirs", Guid.NewGuid().ToString())
-
-    let dir = DirectoryInfo path
+    let dir = DirectoryInfo(Path.Combine(@".\testDirs", $"{Guid.NewGuid()}"))
 
     do dir.Create()
 
     do // create directory for guid (if appropriate)
         match createDirForGuid with
         | Some guid ->
-            let pathForGuid = Path.Combine(dir.FullName, guid.ToString())
+            let pathForGuid = Path.Combine(dir.FullName, $"{guid}")
             (DirectoryInfo pathForGuid).Create()
         | None -> ()
 
@@ -30,7 +28,7 @@ type private TestSimplePersistenceDir(createDirForGuid: Guid option, ?retainOnDi
 
     member _.TryWriteFileAsync(guid: Guid, fileName: string, lines: string list) = asyncResult {
         try
-            let file = FileInfo(Path.Combine(path, guid.ToString(), fileName))
+            let file = FileInfo(Path.Combine(dir.FullName, $"{guid}", fileName))
 
             if File.Exists file.FullName then
                 return! Error $"File {file.Name} already exists"
@@ -38,7 +36,7 @@ type private TestSimplePersistenceDir(createDirForGuid: Guid option, ?retainOnDi
             return! File.WriteAllLinesAsync(file.FullName, lines)
 
         with exn ->
-            return! Error $"Exception writing file for {guid}: {exn.Message}"
+            return! Error $"Exception writing file {fileName} for {guid}: {exn.Message}"
     }
 
     interface IDisposable with

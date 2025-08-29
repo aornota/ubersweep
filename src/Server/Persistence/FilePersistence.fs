@@ -91,7 +91,7 @@ module FilePersistence =
                         $"Expected last {expectedLastRvn} for events file {eventsFile.EventsFileName} but decoded last {nameof EventLine} is {previousRvn}"
 
         try
-            let path = Path.Combine(dir.FullName, guid.ToString())
+            let path = Path.Combine(dir.FullName, $"{guid}")
             let! lines = File.ReadAllLinesAsync(Path.Combine(path, eventsFile.EventsFileName))
 
             match lines |> List.ofArray with
@@ -120,7 +120,7 @@ module FilePersistence =
 
     let tryDecodeSnapshotFileAsync (dir: DirectoryInfo, guid: Guid) (snapshotFile: SnapshotFile) = asyncResult {
         try
-            let path = Path.Combine(dir.FullName, guid.ToString())
+            let path = Path.Combine(dir.FullName, $"{guid}")
             let! lines = File.ReadAllLinesAsync(Path.Combine(path, snapshotFile.SnapshotFileName))
 
             match lines |> List.ofArray with
@@ -176,7 +176,7 @@ module FilePersistence =
                     Rvn = Rvn rvn
                 }
 
-        let path = Path.Combine(dir.FullName, guid.ToString())
+        let path = Path.Combine(dir.FullName, $"{guid}")
         let pathForError = $@"...\{dir.Name}\{guid}"
 
         let checkFiles (eventsFiles: EventsFile list) (snapshotFiles: SnapshotFile list) =
@@ -440,7 +440,7 @@ type private FileReaderAndWriter
             let! _ = // error if any files exist
                 match (DirectoryInfo path).GetFiles() |> List.ofArray |> List.map _.Name with
                 | [] -> Ok()
-                | fileNames -> Error $"Files exist when reading all for {pathForError}: {fileNames}"
+                | fileNames -> Error $"Files exist when reading all for {pathForError}: {fileNames |> List.sort}"
 
             let dirAndGuids =
                 (DirectoryInfo path).EnumerateDirectories()
@@ -457,7 +457,8 @@ type private FileReaderAndWriter
                 with
                 | [] -> Ok(dirAndGuids |> List.choose snd)
                 | dirNames ->
-                    Error $"Non-{nameof Guid} directories exist when reading all for {pathForError}: {dirNames}"
+                    Error
+                        $"Non-{nameof Guid} directories exist when reading all for {pathForError}: {dirNames |> List.sort}"
 
             let! results =
                 guids
@@ -494,7 +495,7 @@ type private FileReaderAndWriter
                 | SnapshotAndEvents _ ->
                     Error $"Directory for {guid} is not empty when creating from snapshot in {pathForError}"
 
-            let pathForGuid = Path.Combine(path, guid.ToString())
+            let pathForGuid = Path.Combine(path, $"{guid}")
 
             if not dirExists then
                 Directory.CreateDirectory pathForGuid |> ignore<DirectoryInfo>
@@ -533,7 +534,7 @@ type private FileReaderAndWriter
                 | SnapshotAndEvents(_, eventsFile) ->
                     if rvn = eventsFile.LastRvn.NextRvn then
                         if strictMode then
-                            // This will (among other checks) verify that the last EventLine in the file is actually eventsFile.LastRvn.
+                            // This will (among other checks) verify that the last EventLine in the events file is actually eventsFile.LastRvn.
                             let! result = FilePersistence.tryDecodeEventsFileAsync (DirectoryInfo path, guid) eventsFile
 
                             match result with
@@ -550,7 +551,7 @@ type private FileReaderAndWriter
                 | SnapshotOnly snapshotFile ->
                     if rvn = snapshotFile.Rvn.NextRvn then
                         if strictMode then
-                            // This will (among other checks) verify that the only SnapshotLine in the file is actually snapshotFile.Rvn.
+                            // This will (among other checks) verify that the only SnapshotLine in the snapshot file is actually snapshotFile.Rvn.
                             let! result =
                                 FilePersistence.tryDecodeSnapshotFileAsync (DirectoryInfo path, guid) snapshotFile
 
@@ -567,7 +568,7 @@ type private FileReaderAndWriter
                                 $"{rvn} is inconsistent with {nameof Rvn} ({snapshotFile.Rvn}) for latest snapshot file {snapshotFile.SnapshotFileName} when writing event for {guid} in {pathForError}"
             }
 
-            let pathForGuid = Path.Combine(path, guid.ToString())
+            let pathForGuid = Path.Combine(path, $"{guid}")
 
             if dirStatus = DoesNotExist then
                 Directory.CreateDirectory pathForGuid |> ignore<DirectoryInfo>
@@ -672,13 +673,13 @@ type private FileReaderAndWriter
 
 type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, logger) =
     [<Literal>]
-    let relativeRootKey = "RelativeRoot"
+    static let relativeRootKey = "RelativeRoot"
 
     [<Literal>]
-    let snapshotFrequencyKey = "SnapshotFrequency"
+    static let snapshotFrequencyKey = "SnapshotFrequency"
 
     [<Literal>]
-    let strictModeKey = "StrictMode"
+    static let strictModeKey = "StrictMode"
 
     [<Literal>]
     let defaultRelativeRoot = "persisted"
@@ -697,7 +698,7 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
     let root, isConfiguredRoot =
         let pair =
             try
-                let root = config[$"{nameof FilePersistenceFactory}:{relativeRootKey}"]
+                let root = config[FilePersistenceFactory.RelativeRootKey]
 
                 if String.IsNullOrWhiteSpace root then
                     defaultRelativeRoot, false
@@ -717,8 +718,7 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
 
     let snapshotFrequency, isConfiguredSnapshotFrequency =
         try
-            let key = $"{nameof FilePersistenceFactory}:{snapshotFrequencyKey}"
-            let snapshotFrequency = config[key]
+            let snapshotFrequency = config[FilePersistenceFactory.SnapshotFrequencyKey]
 
             if String.IsNullOrWhiteSpace snapshotFrequency then
                 defaultSnapshotFrequency, false
@@ -729,7 +729,7 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
                     logger.Warning(
                         "Value {snapshotFrequency} for {key} configuration setting is invalid (must be an integer greater than 1)",
                         snapshotFrequency,
-                        key
+                        FilePersistenceFactory.SnapshotFrequencyKey
                     )
 
                     defaultSnapshotFrequency, false
@@ -750,7 +750,7 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
 
     let strictMode, isConfiguredStrictMode =
         try
-            let strictMode = config[$"{nameof FilePersistenceFactory}:{strictModeKey}"]
+            let strictMode = config[FilePersistenceFactory.StrictModeKey]
 
             if String.IsNullOrWhiteSpace strictMode then
                 defaultStrictMode, false
@@ -786,6 +786,10 @@ type FilePersistenceFactory(config: IConfiguration, clock: IPersistenceClock, lo
             (fun _ ->
                 new FileReaderAndWriter(root, partitionName, entityName, snapshotFrequency, strictMode, clock, logger))
         )
+
+    static member RelativeRootKey = $"{nameof FilePersistenceFactory}:{relativeRootKey}"
+    static member SnapshotFrequencyKey = $"{nameof FilePersistenceFactory}:{snapshotFrequencyKey}"
+    static member StrictModeKey = $"{nameof FilePersistenceFactory}:{strictModeKey}"
 
     interface IPersistenceFactory with
         member _.GetReader<'state, 'event when 'state :> IState<'state, 'event>> partitionName =
