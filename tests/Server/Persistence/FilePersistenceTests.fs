@@ -771,7 +771,7 @@ module FilePersistenceTests =
 
                     result
                     |> Check.isError
-                        $"Snaphot file {snapshotFileName2} follows snapshot file {snapshotFileName1} in {testDir.PathForError guid}"
+                        $"Snapshot file {snapshotFileName2} follows snapshot file {snapshotFileName1} in {testDir.PathForError guid}"
                 }
                 testAsync "Events file follows events file" {
                     let guid = Guid.NewGuid()

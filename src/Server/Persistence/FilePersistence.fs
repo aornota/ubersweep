@@ -11,8 +11,6 @@ open System.Collections.Concurrent
 open System.IO
 open Thoth.Json.Net
 
-// TODO-TESTS: Write tests for FileReaderAndWriter (via FilePersistenceFactory): ReadAllAsync | CreateFromSnapshotAsync | WriteEventAsync...
-
 // Note that EventsFile, EventLine, Snapshot[File|Line], DirStatus, and FilePersistence module are not private in order to facilitate unit testing.
 
 type EventsFile = {
@@ -192,7 +190,7 @@ module FilePersistence =
 
                     if isSnapshot && previousIsSnapshot then
                         Error
-                            $"Snaphot file {getSnapshotFileName firstRvn} follows snapshot file {getSnapshotFileName previousFirstRvn} in {pathForError}"
+                            $"Snapshot file {getSnapshotFileName firstRvn} follows snapshot file {getSnapshotFileName previousFirstRvn} in {pathForError}"
                     else if not isSnapshot && not previousIsSnapshot then
                         Error
                             $"Events file {getEventsFileName (firstRvn, lastRvn)} follows events file {getEventsFileName (previousFirstRvn, previousLastRvn)} in {pathForError}"
@@ -600,7 +598,7 @@ type private FileReaderAndWriter
                 if rvn.UInt32 % snapshotFrequency = 0u then
                     let! snapshotFileName = FilePersistence.getSnapshotFileName rvn
                     let snapshotFilePath = Path.Combine(pathForGuid, snapshotFileName)
-                    let (Json snapshotLine) = Json.encode (SnapshotJson(rvn, getSnapshot ()))
+                    let (Json snapshotLine) = Json.encode (SnapshotLine(rvn, getSnapshot ()))
                     do! File.WriteAllLinesAsync(snapshotFilePath, [| snapshotLine |])
                 else
                     ()

@@ -149,8 +149,6 @@ module FilePersistenceFactoryTests =
         testList "happy" [
             testList "ReadAllAsync" [
                 // Note: Use partition for these.
-                (* TODO-TESTS:
-                *)
                 testAsync "No Guid directories exist" {
                     use testDir =
                         new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
@@ -195,16 +193,359 @@ module FilePersistenceFactoryTests =
                             )
                     ]
                 }
+                testAsync "Single Guid directory with single snapshot file" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let snapshotFile =
+                        addFileExtension Snapshot "1", [ """["SnapshotLine",["Rvn",1],["Json","{\"Count\":1}"]]""" ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ snapshotFile ])
+                        return! testDir.Reader.ReadAllAsync()
+                    }
+
+                    result
+                    |> Check.isOk [
+                        guid,
+                        NonEmptyList<Entry'>
+                            .Create(
+                                SnapshotJson(Rvn 1u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
+                                []
+                            )
+                    ]
+                }
+                testAsync "Multiple Guid directories" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
+
+                    let snapshotFile_1 =
+                        addFileExtension Snapshot "5", [ """["SnapshotLine",["Rvn",5],["Json","{\"Count\":1}"]]""" ]
+
+                    let eventsFile_1 =
+                        addFileExtension Events "6-7",
+                        [
+                            """["EventLine",["Rvn",6],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","\"Incremented\""]]"""
+                            """["EventLine",["Rvn",7],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","\"Incremented\""]]"""
+                        ]
+
+                    let eventsFile1_2 =
+                        addFileExtension Events "1-2",
+                        [
+                            """["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
+                            """["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","\"Incremented\""]]"""
+                        ]
+
+                    let snapshotFile_2 =
+                        addFileExtension Snapshot "2", [ """["SnapshotLine",["Rvn",2],["Json","{\"Count\":0}"]]""" ]
+
+                    let eventsFile2_2 =
+                        addFileExtension Events "3-4",
+                        [
+                            """["EventLine",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","\"Decremented\""]]"""
+                            """["EventLine",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","\"Decremented\""]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid1, [ snapshotFile_1; eventsFile_1 ])
+                        let! _ = tryWriteFilesAsync (testDir, guid2, [ eventsFile1_2; snapshotFile_2; eventsFile2_2 ])
+                        return! testDir.Reader.ReadAllAsync()
+                    }
+
+                    let expected = [
+                        guid1,
+                        NonEmptyList<Entry'>
+                            .Create(
+                                SnapshotJson(Rvn 5u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
+                                [
+                                    EventJson(Rvn 6u, fixedUtcNow, sourceSystemTest, (Incremented :> IEvent).EventJson)
+                                    EventJson(Rvn 7u, fixedUtcNow, sourceSystemTest, (Incremented :> IEvent).EventJson)
+                                ]
+                            )
+                        guid2,
+                        NonEmptyList<Entry'>
+                            .Create(
+                                SnapshotJson(Rvn 2u, ({ Count = 0 } :> IState<Counter, CounterEvent>).SnapshotJson),
+                                [
+                                    EventJson(Rvn 3u, fixedUtcNow, sourceSystemTest, (Decremented :> IEvent).EventJson)
+                                    EventJson(Rvn 4u, fixedUtcNow, sourceSystemTest, (Decremented :> IEvent).EventJson)
+                                ]
+                            )
+                    ]
+
+                    result |> Check.isOk (expected |> List.sortBy fst)
+                }
             ]
             testList "CreateFromSnapshotAsync" [
-            // Note: Use partition for these.
-            (* TODO-TESTS:
-            *)
+                // Note: Use partition for these.
+                testAsync "Initial revision" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        let! _ = testDir.Writer.CreateFromSnapshotAsync(guid, Rvn.InitialRvn, Json """{"Count":666}""")
+                        return! testDir.TryReadFileAsync(guid, addFileExtension Snapshot "1")
+                    }
+
+                    result
+                    |> Check.isOk [ """["SnapshotLine",["Rvn",1],["Json","{\"Count\":666}"]]""" ]
+                }
+                testAsync "Non-initial revision" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        let! _ = testDir.Writer.CreateFromSnapshotAsync(guid, Rvn 2048u, Json """{"Count":8192}""")
+                        return! testDir.TryReadFileAsync(guid, addFileExtension Snapshot "2048")
+                    }
+
+                    result
+                    |> Check.isOk [ """["SnapshotLine",["Rvn",2048],["Json","{\"Count\":8192}"]]""" ]
+                }
             ]
             testList "WriteEventAsync" [
-            // Note: Do not use partition for these.
-            (* TODO-TESTS:
-            *)
+                // Note: Do not use partition for these.
+                testAsync "Single (initial revision) event with no existing events or snapshot files" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 1u, sourceUser1, Incremented, None)
+                        return! testDir.TryReadFileAsync(guid, addFileExtension Events "1-1")
+                    }
+
+                    result
+                    |> Check.isOk [
+                        $"""["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","\"Incremented\""]]"""
+                    ]
+                }
+                testAsync "Single (non-initial revision) event with latest events file" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let eventsFile =
+                        addFileExtension Events "1-2",
+                        [
+                            """["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","[\"Initialized\",-1]"]]"""
+                            """["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["System","Test"],["Json","\"Incremented\""]]"""
+                        ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ eventsFile ])
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 3u, sourceUser2, MultipliedBy 2, None)
+                        return! testDir.TryReadFileAsync(guid, addFileExtension Events "1-3")
+                    }
+
+                    let expected =
+                        snd eventsFile
+                        @ [
+                            $"""["EventLine",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","[\"MultipliedBy\",2]"]]"""
+                        ]
+
+                    result |> Check.isOk expected
+                }
+                testAsync "Single (non-initial revision) event with latest snapshot file" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let snapshotFile =
+                        addFileExtension Snapshot "5", [ """["SnapshotLine",["Rvn",5],["Json","{\"Count\":7}"]]""" ]
+
+                    let! result = asyncResult {
+                        let! _ = tryWriteFilesAsync (testDir, guid, [ snapshotFile ])
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 6u, sourceUser1, MultipliedBy 2, None)
+                        let! snapshotFileLines = testDir.TryReadFileAsync(guid, fst snapshotFile)
+                        let! eventsFileLines = testDir.TryReadFileAsync(guid, addFileExtension Events "6-6")
+                        return! Ok(snapshotFileLines, eventsFileLines)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        snd snapshotFile,
+                        [
+                            $"""["EventLine",["Rvn",6],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","[\"MultipliedBy\",2]"]]"""
+                        ]
+                    )
+                }
+                testAsync "Multiple events with snapshotting not enabled" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            None
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 1u, sourceUser1, Initialized 0, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 2u, sourceUser2, Incremented, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 3u, sourceUser2, Incremented, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 4u, sourceUser2, MultipliedBy 4, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 5u, sourceUser1, Decremented, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 6u, sourceUser1, DividedBy 2, None)
+                        return! testDir.TryReadFileAsync(guid, addFileExtension Events "1-6")
+                    }
+
+                    result
+                    |> Check.isOk [
+                        $"""["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","[\"Initialized\",0]"]]"""
+                        $"""["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","\"Incremented\""]]"""
+                        $"""["EventLine",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","\"Incremented\""]]"""
+                        $"""["EventLine",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","[\"MultipliedBy\",4]"]]"""
+                        $"""["EventLine",["Rvn",5],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","\"Decremented\""]]"""
+                        $"""["EventLine",["Rvn",6],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","[\"DividedBy\",2]"]]"""
+                    ]
+                }
+                testAsync "Multiple events with snapshotting enabled and snapshots provided" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            Some 5u
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        let! _ =
+                            testDir.Writer.WriteEventAsync(
+                                guid,
+                                Rvn 1u,
+                                sourceUser1,
+                                Initialized 0,
+                                Some(fun _ -> ({ Count = 0 } :> IState<Counter, CounterEvent>).SnapshotJson)
+                            )
+
+                        let! _ =
+                            testDir.Writer.WriteEventAsync(
+                                guid,
+                                Rvn 2u,
+                                sourceUser2,
+                                Incremented,
+                                Some(fun _ -> ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson)
+                            )
+
+                        let! _ =
+                            testDir.Writer.WriteEventAsync(
+                                guid,
+                                Rvn 3u,
+                                sourceUser2,
+                                Incremented,
+                                Some(fun _ -> ({ Count = 2 } :> IState<Counter, CounterEvent>).SnapshotJson)
+                            )
+
+                        let! _ =
+                            testDir.Writer.WriteEventAsync(
+                                guid,
+                                Rvn 4u,
+                                sourceUser2,
+                                MultipliedBy 4,
+                                Some(fun _ -> ({ Count = 8 } :> IState<Counter, CounterEvent>).SnapshotJson)
+                            )
+
+                        let! _ =
+                            testDir.Writer.WriteEventAsync(
+                                guid,
+                                Rvn 5u,
+                                sourceUser1,
+                                Decremented,
+                                Some(fun _ -> ({ Count = 7 } :> IState<Counter, CounterEvent>).SnapshotJson)
+                            )
+
+                        let! _ =
+                            testDir.Writer.WriteEventAsync(
+                                guid,
+                                Rvn 6u,
+                                sourceUser1,
+                                DividedBy 2,
+                                Some(fun _ -> ({ Count = 3 } :> IState<Counter, CounterEvent>).SnapshotJson)
+                            )
+
+                        let! eventsLines1 = testDir.TryReadFileAsync(guid, addFileExtension Events "1-5")
+                        let! snapshotLines = testDir.TryReadFileAsync(guid, addFileExtension Snapshot "5")
+                        let! eventsLines2 = testDir.TryReadFileAsync(guid, addFileExtension Events "6-6")
+
+                        return! Ok(eventsLines1, snapshotLines, eventsLines2)
+                    }
+
+                    result
+                    |> Check.isOk (
+                        [
+                            $"""["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","[\"Initialized\",0]"]]"""
+                            $"""["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","\"Incremented\""]]"""
+                            $"""["EventLine",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","\"Incremented\""]]"""
+                            $"""["EventLine",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","[\"MultipliedBy\",4]"]]"""
+                            $"""["EventLine",["Rvn",5],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","\"Decremented\""]]"""
+                        ],
+                        [ """["SnapshotLine",["Rvn",5],["Json","{\"Count\":7}"]]""" ],
+                        [
+                            $"""["EventLine",["Rvn",6],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","[\"DividedBy\",2]"]]"""
+                        ]
+                    )
+                }
+                testAsync "Multiple events with snapshotting enabled but snapshots not provided" {
+                    use testDir =
+                        new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                            Some partitionName,
+                            Some 5u
+                        )
+
+                    let guid = Guid.NewGuid()
+
+                    let! result = asyncResult {
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 1u, sourceUser1, Initialized 0, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 2u, sourceUser2, Incremented, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 3u, sourceUser2, Incremented, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 4u, sourceUser2, MultipliedBy 4, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 5u, sourceUser1, Decremented, None)
+                        let! _ = testDir.Writer.WriteEventAsync(guid, Rvn 6u, sourceUser1, DividedBy 2, None)
+                        return! testDir.TryReadFileAsync(guid, addFileExtension Events "1-6")
+                    }
+
+                    result
+                    |> Check.isOk [
+                        $"""["EventLine",["Rvn",1],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","[\"Initialized\",0]"]]"""
+                        $"""["EventLine",["Rvn",2],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","\"Incremented\""]]"""
+                        $"""["EventLine",["Rvn",3],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","\"Incremented\""]]"""
+                        $"""["EventLine",["Rvn",4],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId2 :> IId).Guid}"]],["Json","[\"MultipliedBy\",4]"]]"""
+                        $"""["EventLine",["Rvn",5],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","\"Decremented\""]]"""
+                        $"""["EventLine",["Rvn",6],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","[\"DividedBy\",2]"]]"""
+                    ]
+                }
             ]
         ]
 
@@ -293,7 +634,7 @@ module FilePersistenceFactoryTests =
                 }
             ]
             testList "WriteEventAsync" [
-                testAsync "Guid directory does not exist but revision is not initial revision" {
+                testAsync "Guid directory does not exist but revision is non-initial revision" {
                     use testDir =
                         new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
@@ -307,7 +648,7 @@ module FilePersistenceFactoryTests =
                     |> Check.isError
                         $"Directory for {guid} does not exist but {Rvn 5u} is not {Rvn.InitialRvn} when writing event for {guid} in {testDir.PathForError}"
                 }
-                testAsync "Guid directory is empty but revision is not initial revision" {
+                testAsync "Guid directory is empty but revision is non-initial revision" {
                     use testDir =
                         new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
 
