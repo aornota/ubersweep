@@ -30,13 +30,11 @@ module EntityHelperTests =
                 }
 
                 result
-                |> Check.isOk (
-                    Ok {
-                        Id = CounterId.FromGuid guid
-                        Rvn = Rvn.InitialRvn
-                        State = { Count = 1 }
-                    }
-                )
+                |> Check.isOk {
+                    Id = CounterId.FromGuid guid
+                    Rvn = Rvn.InitialRvn
+                    State = { Count = 1 }
+                }
             }
             test "Create from multiple event entries" {
                 let helper = CounterEventHelper()
@@ -57,13 +55,11 @@ module EntityHelperTests =
                 }
 
                 result
-                |> Check.isOk (
-                    Ok {
-                        Id = CounterId.FromGuid guid
-                        Rvn = Rvn 3u
-                        State = { Count = 1 }
-                    }
-                )
+                |> Check.isOk {
+                    Id = CounterId.FromGuid guid
+                    Rvn = Rvn 3u
+                    State = { Count = 1 }
+                }
             }
             test "Create from multiple entries with snapshot" {
                 let helper = CounterEventHelper()
@@ -83,13 +79,11 @@ module EntityHelperTests =
                 }
 
                 result
-                |> Check.isOk (
-                    Ok {
-                        Id = CounterId.FromGuid guid
-                        Rvn = Rvn 4u
-                        State = { Count = 2 }
-                    }
-                )
+                |> Check.isOk {
+                    Id = CounterId.FromGuid guid
+                    Rvn = Rvn 4u
+                    State = { Count = 2 }
+                }
             }
         ]
 

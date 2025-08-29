@@ -17,9 +17,7 @@
     <Compile Include="Common\IState.fs" />
     <Compile Include="Common\SourcedLogger.fs" />
     <Compile Include="Persistence\Common.fs" />
-    <Compile Include="Persistence\CommonLegacy.fs" />
     <Compile Include="Persistence\FilePersistence.fs" />
-    <Compile Include="Persistence\FileReaderAndWriterLegacy.fs" />
     <Compile Include="Entities\Entity.fs" />
     <Compile Include="Entities\Draft.fs" />
     <Compile Include="Entities\Fixture.fs" />

@@ -11,9 +11,9 @@ module Main =
     let tests =
         testList "Server" [
             EntityHelperTests.tests
+            UserTests.tests
             FilePersistenceTests.tests
             FilePersistenceFactoryTests.tests
-            UserTests.tests
         ]
 
     [<EntryPoint>]

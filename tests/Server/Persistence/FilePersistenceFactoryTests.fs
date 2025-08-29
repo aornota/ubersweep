@@ -121,6 +121,46 @@ type TestPersistenceDir<'id, 'state, 'initEvent, 'event
 
 [<RequireQualifiedAccess>]
 module FilePersistenceFactoryTests =
+    let private initializeAndApply
+        (
+            testDir: TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>,
+            guid,
+            initCommandPair,
+            commandsPairs
+        ) =
+        asyncResult {
+            let rec apply counter commandsPairs = asyncResult {
+                match commandsPairs with
+                | (event, source) :: t ->
+                    let! counter, event = counter |> Counter.apply event
+
+                    let! _ =
+                        testDir.Writer.WriteEventAsync(
+                            guid,
+                            counter.Rvn,
+                            source,
+                            event,
+                            Some(fun _ -> (counter.State :> IState<Counter, CounterEvent>).SnapshotJson)
+                        )
+
+                    return! apply counter t
+                | [] -> return counter
+            }
+
+            let counter, initEvent = Counter.helper.InitFromCommand(guid, fst initCommandPair)
+
+            let! _ =
+                testDir.Writer.WriteEventAsync(
+                    guid,
+                    counter.Rvn,
+                    snd initCommandPair,
+                    initEvent,
+                    Some(fun _ -> (counter.State :> IState<Counter, CounterEvent>).SnapshotJson)
+                )
+
+            return! apply counter commandsPairs
+        }
+
     let private tryWriteFilesAsync
         (testDir: TestPersistenceDir<'id, 'state, 'initEvent, 'event>, guid: Guid, files: (string * string list) list)
         =
@@ -184,7 +224,7 @@ module FilePersistenceFactoryTests =
                     result
                     |> Check.isOk [
                         guid,
-                        NonEmptyList<Entry'>
+                        NonEmptyList<Entry>
                             .Create(
                                 EventJson(Rvn 1u, fixedUtcNow, sourceSystemTest, (Initialized -1 :> IEvent).EventJson),
                                 [
@@ -213,7 +253,7 @@ module FilePersistenceFactoryTests =
                     result
                     |> Check.isOk [
                         guid,
-                        NonEmptyList<Entry'>
+                        NonEmptyList<Entry>
                             .Create(
                                 SnapshotJson(Rvn 1u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                 []
@@ -264,7 +304,7 @@ module FilePersistenceFactoryTests =
 
                     let expected = [
                         guid1,
-                        NonEmptyList<Entry'>
+                        NonEmptyList<Entry>
                             .Create(
                                 SnapshotJson(Rvn 5u, ({ Count = 1 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                 [
@@ -273,7 +313,7 @@ module FilePersistenceFactoryTests =
                                 ]
                             )
                         guid2,
-                        NonEmptyList<Entry'>
+                        NonEmptyList<Entry>
                             .Create(
                                 SnapshotJson(Rvn 2u, ({ Count = 0 } :> IState<Counter, CounterEvent>).SnapshotJson),
                                 [
@@ -431,7 +471,7 @@ module FilePersistenceFactoryTests =
                         $"""["EventLine",["Rvn",6],"2025-08-07T15:11:33.0000000Z",["User",["UserId","{(userId1 :> IId).Guid}"]],["Json","[\"DividedBy\",2]"]]"""
                     ]
                 }
-                testAsync "Multiple events with snapshotting enabled and snapshots provided" {
+                testAsync "Multiple events with snapshotting enabled (and snapshots provided)" {
                     use testDir =
                         new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
                             Some partitionName,
@@ -750,8 +790,126 @@ module FilePersistenceFactoryTests =
 
     let private integration =
         testList "integration" [
-        (* TODO-TESTS:
-        *)
+            testAsync "Single entity with snapshotting not enabled" {
+                use testDir =
+                    new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(None, None)
+
+                let guid = Guid.NewGuid()
+
+                let! result = asyncResult {
+                    let! _ =
+                        initializeAndApply (
+                            testDir,
+                            guid,
+                            (Initialize -1, sourceUser1),
+                            [
+                                Increment, sourceUser1
+                                Increment, sourceUser1
+                                Increment, sourceUser1
+                                MultiplyBy 2, sourceUser2
+                                Increment, sourceUser1
+                                MultiplyBy 2, sourceUser2
+                                Decrement, sourceUser1
+                            ]
+                        )
+
+                    let! all = testDir.Reader.ReadAllAsync()
+
+                    let! entries =
+                        match all with
+                        | [ guid', entries ] when guid' = guid -> Ok entries
+                        | [ guid', _ ] ->
+                            Error $"Reading all returned a single result for an unexpected {nameof Guid}: {guid'}"
+                        | [] -> Error "Reading all returned no results"
+                        | _ -> Error $"Reading all returned an unexpected number ({all.Length}) of results"
+
+                    return! Counter.helper.FromEntries(guid, entries)
+                }
+
+                let expected = {
+                    Id = CounterId.FromGuid guid
+                    Rvn = Rvn 8u
+                    State = { Count = 9 }
+                }
+
+                result |> Check.isOk expected
+            }
+            testAsync "Multiple entities with snapshotting enabled (and snapshots provided)" {
+                use testDir =
+                    new TestPersistenceDir<CounterId, Counter, CounterInitEvent, CounterEvent>(
+                        Some partitionName,
+                        Some 5u
+                    )
+
+                let guids = [| Guid.NewGuid(); Guid.NewGuid() |] |> Array.sort
+                let guid1, guid2 = guids[0], guids[1]
+
+                let! result = asyncResult {
+                    let! _ =
+                        initializeAndApply (
+                            testDir,
+                            guid1,
+                            (Initialize -1, sourceUser1),
+                            [
+                                Increment, sourceUser1
+                                Increment, sourceUser1
+                                Increment, sourceUser1
+                                MultiplyBy 2, sourceUser2
+                                Increment, sourceUser1
+                                MultiplyBy 2, sourceUser2
+                                Decrement, sourceUser1
+                            ]
+                        )
+
+                    let! _ =
+                        initializeAndApply (
+                            testDir,
+                            guid2,
+                            (Initialize 10, sourceUser1),
+                            [
+                                DivideBy 5, sourceUser1
+                                Increment, sourceUser1
+                                Increment, sourceUser1
+                                MultiplyBy 3, sourceUser2
+                                Increment, sourceUser1
+                                MultiplyBy 2, sourceUser2
+                                Decrement, sourceUser1
+                                Decrement, sourceUser1
+                                Decrement, sourceUser2
+                            ]
+                        )
+
+                    let! all = testDir.Reader.ReadAllAsync()
+
+                    let! entries1, entries2 =
+                        match all with
+                        | [ guid1', entries1; guid2', entries2 ] when guid1' = guid1 && guid2' = guid2 ->
+                            Ok(entries1, entries2)
+                        | [ guid1', _; guid2', _ ] ->
+                            Error
+                                $"Reading all returned two results for unexpected {nameof Guid}s: {guid1'} and {guid2'}"
+                        | [] -> Error "Reading all returned no results"
+                        | _ -> Error $"Reading all returned an unexpected number ({all.Length}) of results"
+
+                    let! entity1 = Counter.helper.FromEntries(guid1, entries1)
+                    let! entity2 = Counter.helper.FromEntries(guid2, entries2)
+                    return! Ok(entity1, entity2)
+                }
+
+                let expected1 = {
+                    Id = CounterId.FromGuid guid1
+                    Rvn = Rvn 8u
+                    State = { Count = 9 }
+                }
+
+                let expected2 = {
+                    Id = CounterId.FromGuid guid2
+                    Rvn = Rvn 10u
+                    State = { Count = 23 }
+                }
+
+                result |> Check.isOk (expected1, expected2)
+            }
         ]
 
     let tests = testList $"{nameof FilePersistenceFactory}" [ happy; sad; integration ]

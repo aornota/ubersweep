@@ -72,5 +72,5 @@ type EntityHelper<'id, 'state, 'initCommand, 'initEvent, 'event
 
         let! events = mapToEvents subsequentEntries []
 
-        return events |> List.fold folder (Ok entityFromFirstEntry)
+        return! events |> List.fold folder (Ok entityFromFirstEntry)
     }
