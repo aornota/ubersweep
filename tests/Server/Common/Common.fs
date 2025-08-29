@@ -33,6 +33,9 @@ module Check =
     let equal (expected: 'a) (actual: 'a) =
         Expect.equal actual expected $"Unexpected value"
 
+    let notEqual (expected: 'a) (actual: 'a) =
+        Expect.notEqual actual expected $"Unexpected value"
+
     let isOk (expectedOk: 'a) (result: Result<'a, 'b>) =
         match result with
         | Ok actualOk -> Expect.equal actualOk expectedOk $"Unexpected {nameof Ok} value"

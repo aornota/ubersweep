@@ -10,11 +10,10 @@ open Serilog.Sinks.SystemConsole.Themes
 module Main =
     let tests =
         testList "Server" [
-            // TEMP...EntityHelperTests.tests
-            // TEMP...FilePersistenceTests.tests
+            EntityHelperTests.tests
+            FilePersistenceTests.tests
             FilePersistenceFactoryTests.tests
-        // TODO-PERSISTENCE: Remove...FileReaderAndWriterLegacyTests.tests
-        // TEMP...UserTests.tests
+            UserTests.tests
         ]
 
     [<EntryPoint>]
