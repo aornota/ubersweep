@@ -90,7 +90,7 @@ type Startup(config) =
         new FilePersistenceFactory(config, PersistenceClock(), logger)
 
     do // run migration (subject to configuration)
-        Migration(config, persistenceFactory, logger).MigrateAsync()
+        Migrator(config, persistenceFactory, logger).MigrateAsync()
         |> Async.RunSynchronously
         |> ignore<Result<unit, string>>
 

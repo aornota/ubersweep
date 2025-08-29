@@ -27,7 +27,7 @@ type TestPersistenceDir<'id, 'state, 'initEvent, 'event
     let skipCreatingDir = defaultArg skipCreatingDir false
     let retainOnDispose = defaultArg retainOnDispose false
 
-    let relativeRoot = Path.Combine(@".\testDirs", $"{Guid.NewGuid()}")
+    let relativeRoot = Path.Combine("testDirs", $"{Guid.NewGuid()}")
     let entityName: EntityName = sanitize typeof<'state>
 
     let subPath =
@@ -35,7 +35,7 @@ type TestPersistenceDir<'id, 'state, 'initEvent, 'event
         | Some partitionName -> Path.Combine(partitionName, entityName)
         | None -> entityName
 
-    let dir = DirectoryInfo(Path.Combine(relativeRoot, subPath))
+    let dir = DirectoryInfo(Path.Combine($@".\{relativeRoot}", subPath))
 
     do // create dir (if appropriate)
         if not (skipCreatingDir || dir.Exists) then

@@ -289,7 +289,7 @@ type private PartitionHelper<'group, 'stage, 'unconfirmed, 'playerType, 'matchEv
         return! Ok()
     }
 
-type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, logger) =
+type Migrator(config: IConfiguration, persistenceFactory: IPersistenceFactory, logger) =
     [<Literal>]
     let migrateOnStartUpKey = "MigrateOnStartUp"
 
@@ -304,13 +304,13 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
     let configuredOrDefault isConfigured =
         if isConfigured then "configured" else "default"
 
-    let logger = SourcedLogger.Create<Migration> logger
+    let logger = SourcedLogger.Create<Migrator> logger
 
     do logger.Verbose "Reading configuration"
 
     let migrateOnStartUp, isConfiguredMigrateOnStartUp =
         try
-            let key = $"{nameof Migration}:{migrateOnStartUpKey}"
+            let key = $"{nameof Migrator}:{migrateOnStartUpKey}"
             let migrateOnStartUp = config[key]
 
             if String.IsNullOrWhiteSpace migrateOnStartUp then
@@ -338,7 +338,7 @@ type Migration(config: IConfiguration, persistenceFactory: IPersistenceFactory, 
 
     let root, isConfiguredRoot =
         try
-            let root = config[$"{nameof Migration}:{rootKey}"]
+            let root = config[$"{nameof Migrator}:{rootKey}"]
 
             if String.IsNullOrWhiteSpace root then
                 defaultRoot, false
