@@ -42,7 +42,7 @@ module UserTests =
                 let user, _ =
                     User.helper.InitFromCommand(guid, CreateUser("pleb", "password", Pleb))
 
-                let result = result { return! User.apply (ChangeUserType newUserType) user }
+                let result = result { return! user |> User.apply (ChangeUserType newUserType) }
 
                 result
                 |> Check.isOk (
@@ -63,10 +63,10 @@ module UserTests =
                 let user, _ =
                     User.helper.InitFromCommand(guid, CreateUser("pleb", "password", Pleb))
 
-                let result = result { return! User.apply (ChangePassword("123456", "123456")) user }
+                let result = result { return! user |> User.apply (ChangePassword("123456", "123456")) }
 
-                match result with
-                | Ok(updatedUser, event) ->
+                result
+                |> Check.withOk (fun (updatedUser, event) ->
                     updatedUser.Guid |> Check.equal user.Guid
                     updatedUser.Rvn |> Check.equal user.Rvn.NextRvn
 
@@ -80,15 +80,14 @@ module UserTests =
                     updatedUser.State.PasswordSalt |> Check.notEqual user.State.PasswordSalt
                     updatedUser.State.PasswordHash |> Check.notEqual user.State.PasswordHash
 
-                    match event with
-                    | PasswordChanged _ -> // note: cannot check specific Password[Salt|Hash] as these are non-deterministic
-                        ()
-                    | _ ->
-                        // TODO-TESTS: Rethink how to force test failure...
-                        failwith $"{nameof UserEvent} expected to be {nameof PasswordChanged} but is {event}"
-                | Error error ->
-                    // TODO-TESTS: Rethink how to force test failure...
-                    failwith $"Unexpected error: {error}"
+                    // TODO-TESTS: Change to use event.IsPasswordChanged once upgraded to F# 9...
+                    let isPasswordChanged =
+                        match event with
+                        // note: Cannot check specific Password[Salt|Hash] as these are non-deterministic
+                        | PasswordChanged _ -> true
+                        | _ -> false
+
+                    isPasswordChanged |> Check.equal true)
             }
             test "Reset password" {
                 let guid = Guid.NewGuid()
@@ -96,10 +95,10 @@ module UserTests =
                 let user, _ =
                     User.helper.InitFromCommand(guid, CreateUser("pleb", "password", Pleb))
 
-                let result = result { return! User.apply (ResetPassword("123456", "123456")) user }
+                let result = result { return! user |> User.apply (ResetPassword("123456", "123456")) }
 
-                match result with
-                | Ok(updatedUser, event) ->
+                result
+                |> Check.withOk (fun (updatedUser, event) ->
                     updatedUser.Guid |> Check.equal user.Guid
                     updatedUser.Rvn |> Check.equal user.Rvn.NextRvn
 
@@ -115,15 +114,14 @@ module UserTests =
                     updatedUser.State.PasswordSalt |> Check.notEqual user.State.PasswordSalt
                     updatedUser.State.PasswordHash |> Check.notEqual user.State.PasswordHash
 
-                    match event with
-                    | UserEvent.PasswordReset _ -> // note: cannot check specific Password[Salt|Hash] as these are non-deterministic
-                        ()
-                    | _ ->
-                        // TODO-TESTS: Rethink how to force test failure...
-                        failwith $"{nameof UserEvent} expected to be {nameof UserEvent.PasswordReset} but is {event}"
-                | Error error ->
-                    // TODO-TESTS: Rethink how to force test failure...
-                    failwith $"Unexpected error: {error}"
+                    // TODO-TESTS: Change to use event.IsPasswordReset once upgraded to F# 9...
+                    let isPasswordReset =
+                        match event with
+                        // note: Cannot check specific Password[Salt|Hash] as these are non-deterministic
+                        | UserEvent.PasswordReset _ -> true
+                        | _ -> false
+
+                    isPasswordReset |> Check.equal true)
             }
         ]
 

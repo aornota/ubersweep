@@ -45,3 +45,13 @@ module Check =
         match result with
         | Ok _ -> Expect.isError result incorrectResult
         | Error actualError -> Expect.equal actualError expectedError $"Unexpected {nameof Error} value"
+
+    let withOk (fOk: 'a -> unit) (result: Result<'a, 'b>) =
+        match result with
+        | Ok ok -> fOk ok
+        | Error _ -> Expect.isOk result incorrectResult
+
+    let withError (fError: 'b -> unit) (result: Result<'a, 'b>) =
+        match result with
+        | Ok _ -> Expect.isError result incorrectResult
+        | Error error -> fError error
