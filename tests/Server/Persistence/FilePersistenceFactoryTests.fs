@@ -817,11 +817,10 @@ module FilePersistenceFactoryTests =
 
                     let! entries =
                         match all with
-                        | [ guid', entries ] when guid' = guid -> Ok entries
-                        | [ guid', _ ] ->
-                            Error $"Reading all returned a single result for an unexpected {nameof Guid}: {guid'}"
+                        | [ _, entries ] -> Ok entries
                         | [] -> Error "Reading all returned no results"
-                        | _ -> Error $"Reading all returned an unexpected number ({all.Length}) of results"
+                        | _ ->
+                            Error $"Reading all expected to return a single result but returned ({all.Length}) results"
 
                     return! Counter.helper.FromEntries(guid, entries)
                 }
@@ -841,8 +840,7 @@ module FilePersistenceFactoryTests =
                         Some 5u
                     )
 
-                let guids = [| Guid.NewGuid(); Guid.NewGuid() |] |> Array.sort
-                let guid1, guid2 = guids[0], guids[1]
+                let guid1, guid2 = Guid.NewGuid(), Guid.NewGuid()
 
                 let! result = asyncResult {
                     let! _ =
@@ -881,19 +879,16 @@ module FilePersistenceFactoryTests =
 
                     let! all = testDir.Reader.ReadAllAsync()
 
-                    let! entries1, entries2 =
+                    let! pair1, pair2 =
                         match all with
-                        | [ guid1', entries1; guid2', entries2 ] when guid1' = guid1 && guid2' = guid2 ->
-                            Ok(entries1, entries2)
-                        | [ guid1', _; guid2', _ ] ->
-                            Error
-                                $"Reading all returned two results for unexpected {nameof Guid}s: {guid1'} and {guid2'}"
+                        | [ pair1; pair2 ] -> Ok(pair1, pair2)
                         | [] -> Error "Reading all returned no results"
-                        | _ -> Error $"Reading all returned an unexpected number ({all.Length}) of results"
+                        | _ ->
+                            Error $"Reading all expected to return a single result but returned ({all.Length}) result/s"
 
-                    let! entity1 = Counter.helper.FromEntries(guid1, entries1)
-                    let! entity2 = Counter.helper.FromEntries(guid2, entries2)
-                    return! Ok(entity1, entity2)
+                    let! entity1 = Counter.helper.FromEntries pair1
+                    let! entity2 = Counter.helper.FromEntries pair2
+                    return! Ok([ entity1; entity2 ] |> List.sortBy _.Guid)
                 }
 
                 let expected1 = {
@@ -908,7 +903,9 @@ module FilePersistenceFactoryTests =
                     State = { Count = 23 }
                 }
 
-                result |> Check.isOk (expected1, expected2)
+                let expected = [ expected1; expected2 ] |> List.sortBy _.Guid
+
+                result |> Check.isOk expected
             }
         ]
 
