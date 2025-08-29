@@ -31,8 +31,8 @@ type UserInitCommand = CreateUser of userName: string * password: string * userT
 type UserCommand =
     | ChangeUserType of userType: UserType
     // TODO-ENTITIES: Should ChangePassword have "existing" password?...
-    | ChangePassword of password: string * confirmPassword: string
-    | ResetPassword of password: string * confirmPassword: string
+    | ChangePassword of password: string * confirmationPassword: string
+    | ResetPassword of password: string * confirmationPassword: string
 
 type UserCommon' = {
     UserName: string

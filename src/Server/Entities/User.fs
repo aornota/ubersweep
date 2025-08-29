@@ -109,15 +109,15 @@ module User =
     let private decide command (_: User) =
         match command with
         | ChangeUserType userType -> Ok(UserTypeChanged userType)
-        | ChangePassword(password, confirmPassword) ->
-            if confirmPassword <> password then
-                Error "TODO-ENTITIES..."
+        | ChangePassword(password, confirmationPassword) ->
+            if confirmationPassword <> password then
+                Error "Confirmation password does not match password"
             else
                 let passwordSalt = salt ()
                 Ok(PasswordChanged(passwordSalt, hash (password, passwordSalt)))
-        | ResetPassword(password, confirmPassword) ->
-            if confirmPassword <> password then
-                Error "TODO-ENTITIES..."
+        | ResetPassword(password, confirmationPassword) ->
+            if confirmationPassword <> password then
+                Error "Confirmation password does not match password"
             else
                 let passwordSalt = salt ()
                 Ok(PasswordReset(passwordSalt, hash (password, passwordSalt)))
