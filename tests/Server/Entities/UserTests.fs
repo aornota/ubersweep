@@ -80,14 +80,8 @@ module UserTests =
                     updatedUser.State.PasswordSalt |> Check.notEqual user.State.PasswordSalt
                     updatedUser.State.PasswordHash |> Check.notEqual user.State.PasswordHash
 
-                    // TODO-TESTS: Change to use event.IsPasswordChanged once upgraded to F# 9...
-                    let isPasswordChanged =
-                        match event with
-                        // note: Cannot check specific Password[Salt|Hash] as these are non-deterministic
-                        | PasswordChanged _ -> true
-                        | _ -> false
-
-                    isPasswordChanged |> Check.equal true)
+                    event
+                    |> Check.equal (PasswordChanged(updatedUser.State.PasswordSalt, updatedUser.State.PasswordHash)))
             }
             test "Reset password" {
                 let guid = Guid.NewGuid()
@@ -114,14 +108,10 @@ module UserTests =
                     updatedUser.State.PasswordSalt |> Check.notEqual user.State.PasswordSalt
                     updatedUser.State.PasswordHash |> Check.notEqual user.State.PasswordHash
 
-                    // TODO-TESTS: Change to use event.IsPasswordReset once upgraded to F# 9...
-                    let isPasswordReset =
-                        match event with
-                        // note: Cannot check specific Password[Salt|Hash] as these are non-deterministic
-                        | UserEvent.PasswordReset _ -> true
-                        | _ -> false
-
-                    isPasswordReset |> Check.equal true)
+                    event
+                    |> Check.equal (
+                        UserEvent.PasswordReset(updatedUser.State.PasswordSalt, updatedUser.State.PasswordHash)
+                    ))
             }
         ]
 

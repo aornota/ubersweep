@@ -434,9 +434,9 @@ type Migrator(config: IConfiguration, persistenceFactory: IPersistenceFactory, l
                 else
                     Ok()
 
-            logger.Debug "Starting migration..."
+            logger.Information "Starting migration..."
 
-            logger.Debug("...checking {User}s...", nameof User)
+            logger.Information("...checking {User}s...", nameof User)
             let reader = persistenceFactory.GetReader<User, UserEvent> None
             let! all = reader.ReadAllAsync()
 
@@ -448,7 +448,7 @@ type Migrator(config: IConfiguration, persistenceFactory: IPersistenceFactory, l
                     logger.Error("...cannot migrate as {User}s already exist", nameof User)
                     Error $"Cannot migrate as {nameof User}s already exist"
 
-            logger.Debug("...checking {Sweepstake}s...", nameof Sweepstake)
+            logger.Information("...checking {Sweepstake}s...", nameof Sweepstake)
             let reader = persistenceFactory.GetReader<Sweepstake, SweepstakeEvent> None
             let! all = reader.ReadAllAsync()
 
@@ -532,7 +532,7 @@ type Migrator(config: IConfiguration, persistenceFactory: IPersistenceFactory, l
                 }
             }
 
-            logger.Debug "...checking partitions..."
+            logger.Information "...checking partitions..."
 
             let helperFifa2018 =
                 PartitionHelper<
@@ -655,7 +655,7 @@ type Migrator(config: IConfiguration, persistenceFactory: IPersistenceFactory, l
             let! _ = helperRwc2023.CheckAllAsync()
             let! _ = helperEuro2024.CheckAllAsync()
 
-            logger.Debug("...mapping {User}s...", nameof User)
+            logger.Information("...mapping {User}s...", nameof User)
 
             let! usersFifa2018 = helperFifa2018.ReadUsersAsync()
             let! usersRwc2019 = helperRwc2019.ReadUsersAsync()
@@ -677,7 +677,7 @@ type Migrator(config: IConfiguration, persistenceFactory: IPersistenceFactory, l
 
             let userMapper = UserMapper userLists
 
-            logger.Debug "...migrating partitions..."
+            logger.Information "...migrating partitions..."
 
             let! _ = helperFifa2018.MigrateAsync(userMapper.MapperFor(sourceUserMap usersFifa2018))
             let! _ = helperRwc2019.MigrateAsync(userMapper.MapperFor(sourceUserMap usersRwc2019))
@@ -686,16 +686,16 @@ type Migrator(config: IConfiguration, persistenceFactory: IPersistenceFactory, l
             let! _ = helperRwc2023.MigrateAsync(userMapper.MapperFor(sourceUserMap usersRwc2023))
             let! _ = helperEuro2024.MigrateAsync(userMapper.MapperFor(sourceUserMap usersEuro2024))
 
-            logger.Debug("...writing {User}s...", nameof User)
+            logger.Information("...writing {User}s...", nameof User)
             let! _ = writeUsersAsync (userMapper.Users())
 
-            logger.Debug("...writing {Sweepstake}s...", nameof Sweepstake)
+            logger.Information("...writing {Sweepstake}s...", nameof Sweepstake)
             let! _ = writeSweepstakesAsync [ fifa2018; rwc2019; euro2020; fifa2022; rwc2023; euro2024 ]
 
-            logger.Debug "...completed migration"
+            logger.Information "...completed migration"
 
             return! Ok()
         else
-            logger.Debug "Not configured to migrate on startup"
+            logger.Information "Not configured to migrate on startup"
             return! Ok()
     }
