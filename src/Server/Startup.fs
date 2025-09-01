@@ -9,6 +9,7 @@ open Aornota.Ubersweep.Shared.Common
 open Aornota.Ubersweep.Shared.Entities
 open Aornota.Ubersweep.Shared.TEMP
 
+open FsToolkit.ErrorHandling
 open Giraffe
 open Giraffe.SerilogExtensions
 open Microsoft.AspNetCore.Builder
@@ -20,58 +21,131 @@ open System
 open System.Threading
 
 module private Startup =
-    [<Literal>]
-    let private superUserGuid = "ffffffff-ffff-ffff-ffff-ffffffffffff"
-
-    [<Literal>]
-    let private superUserName = "superuser"
-
-    [<Literal>]
-    let private superUserPasswordSalt = "CHQSX6YO/AM/Tm21txBUwSs5+8FcPFriq8HRKo7yDGA="
-
-    [<Literal>]
-    let private superUserPasswordHash =
-        "+eAhZRK85XUDQjEJ4HEwACNgCN607/BbfiWjcRjr4/WIyqGzMVhGlFtO7lhWSB9fwWzi4Nbzf74Kznm25WmSSw=="
-
-    // TODO-STARTUP: Change this to create SuperUser if no SuperUsers exist (even if other Users exist)? And to populate "UserCache"? And do something similar for Fifa-2026 Sweepstake?...
-    let checkUsersAsync (persistenceFactory: IPersistenceFactory, source: Source, logger: ILogger) = async {
-        logger.Information("...checking {User}s...", nameof User)
+    let readUsersAsync (persistenceFactory: IPersistenceFactory, source: Source, logger: ILogger) = async {
+        logger.Information("...reading {User}s...", nameof User)
         let reader = persistenceFactory.GetReader<User, UserEvent> None
-        let! result = reader.ReadAllAsync()
 
-        match result with
-        | Ok [] ->
-            logger.Information("...creating {SuperUser} because no {User}s exist...", SuperUser, nameof User)
+        match! reader.ReadAllAsync() with
+        | Ok pairs ->
+            let users = pairs |> List.map User.helper.FromEntries |> List.sequenceResultA
 
-            let initEvent =
-                UserCreated(superUserName, superUserPasswordSalt, superUserPasswordHash, SuperUser)
+            match users with
+            | Ok list ->
+                logger.Information("...{length} {User}/s read", list.Length, nameof User)
+                let users = list |> List.map (fun user -> user.Id, user) |> Set.ofList
 
-            let superUser = User.helper.InitFromEvent(Guid superUserGuid, initEvent)
-            let writer = persistenceFactory.GetWriter<User, UserEvent> None
+                return! async {
+                    if
+                        not (
+                            users
+                            |> Set.exists (fun (_, user) -> user.State.UserCommon.UserType = SuperUser)
+                        )
+                    then
+                        logger.Warning(
+                            "...creating {SuperUser} because no such {User}s exist...",
+                            SuperUser,
+                            nameof User
+                        )
 
-            let! result =
-                writer.WriteEventAsync(
-                    superUser.Guid,
-                    Rvn.InitialRvn,
-                    source,
-                    initEvent,
-                    Some(fun _ -> superUser.SnapshotJson)
-                )
+                        let initEvent =
+                            UserCreated(
+                                "superuser",
+                                "CHQSX6YO/AM/Tm21txBUwSs5+8FcPFriq8HRKo7yDGA=",
+                                "+eAhZRK85XUDQjEJ4HEwACNgCN607/BbfiWjcRjr4/WIyqGzMVhGlFtO7lhWSB9fwWzi4Nbzf74Kznm25WmSSw==",
+                                SuperUser
+                            )
 
-            match result with
-            | Ok() -> logger.Information("...{SuperUser} created", SuperUser)
-            | Error error -> logger.Error("...error creating {SuperUser}: {error}", SuperUser, error)
+                        let superUser =
+                            User.helper.InitFromEvent(Guid "ffffffff-ffff-ffff-ffff-ffffffffffff", initEvent)
 
-        | Ok list ->
-            list
-            |> List.iter (fun (guid, entries) ->
-                match User.helper.FromEntries(guid, entries) with
-                | Ok _ -> ()
-                | Error error ->
-                    logger.Error("...error processing {User} entries for {guid}: {error}", nameof User, guid, error))
+                        let writer = persistenceFactory.GetWriter<User, UserEvent> None
 
-            logger.Information("...{length} {User}/s checked", list.Length, nameof User)
-        | Error errors -> logger.Error("...errors checking {User}s: {errors}", nameof User, errors)
+                        match! writer.WriteEventAsync(superUser.Guid, Rvn.InitialRvn, source, initEvent, None) with
+                        | Ok() ->
+                            logger.Information("...{SuperUser} created", SuperUser)
+                            return Ok(users |> Set.add (superUser.Id, superUser))
+                        | Error error ->
+                            logger.Error("...error creating {SuperUser}: {error}", SuperUser, error)
+                            return Error error
+                    else
+                        return Ok users
+                }
+            | Error errors -> return Error $"One or more error when processing entries for {nameof User}s: {errors}"
+        | Error errors -> return Error $"One or more error when reading {nameof User}s: {errors}"
+    }
+
+    let readSweepstakesAsync (persistenceFactory: IPersistenceFactory, source: Source, logger: ILogger) = async {
+        let typeToAutoCreate, yearToAutoCreate = Fifa, 2026u
+
+        logger.Information("...reading {Sweepstake}s...", nameof Sweepstake)
+        let reader = persistenceFactory.GetReader<Sweepstake, SweepstakeEvent> None
+
+        match! reader.ReadAllAsync() with
+        | Ok pairs ->
+            let sweepstakes =
+                pairs |> List.map Sweepstake.helper.FromEntries |> List.sequenceResultA
+
+            match sweepstakes with
+            | Ok list ->
+                logger.Information("...{length} {Sweepstake}/s read", list.Length, nameof Sweepstake)
+                let sweepstakes = list |> List.map (fun user -> user.Id, user) |> Set.ofList
+
+                return! async {
+                    if
+                        not (
+                            sweepstakes
+                            |> Set.exists (fun (_, sweepstake) ->
+                                sweepstake.State.SweepstakeCommon.SweepstakeType = typeToAutoCreate
+                                && sweepstake.State.SweepstakeCommon.Year = yearToAutoCreate)
+                        )
+                    then
+                        logger.Warning(
+                            "...creating {typeToAutoCreate} {yearToAutoCreate} because no such {Sweepstake}s exist...",
+                            typeToAutoCreate,
+                            int yearToAutoCreate,
+                            nameof Sweepstake
+                        )
+
+                        let initEvent =
+                            SweepstakeCreated(
+                                typeToAutoCreate,
+                                yearToAutoCreate,
+                                "The world-famous World Cup 2026 sweepstake",
+                                // TODO-STARTUP: Create "logo"...
+                                "https://github.com/aornota/ubersweep/blob/master/src/Client/public/sweepstake-2026-24x24.png",
+                                26u,
+                                Pending
+                            )
+
+                        let fifa2026 =
+                            Sweepstake.helper.InitFromEvent(Guid "ffffffff-ffff-ffff-ffff-ffffffffffff", initEvent)
+
+                        let writer = persistenceFactory.GetWriter<Sweepstake, SweepstakeEvent> None
+
+                        match! writer.WriteEventAsync(fifa2026.Guid, Rvn.InitialRvn, source, initEvent, None) with
+                        | Ok() ->
+                            logger.Information(
+                                "...{typeToAutoCreate} {yearToAutoCreate} created",
+                                typeToAutoCreate,
+                                int yearToAutoCreate
+                            )
+
+                            return Ok(sweepstakes |> Set.add (fifa2026.Id, fifa2026))
+                        | Error error ->
+                            logger.Error(
+                                "...error creating {typeToAutoCreate} {yearToAutoCreate}: {error}",
+                                typeToAutoCreate,
+                                int yearToAutoCreate,
+                                error
+                            )
+
+                            return Error error
+                    else
+                        return Ok sweepstakes
+                }
+            | Error errors ->
+                return Error $"One or more error when processing entries for {nameof Sweepstake}s: {errors}"
+        | Error errors -> return Error $"One or more error when reading {nameof Sweepstake}s: {errors}"
     }
 
 type Startup(config) =
@@ -94,9 +168,27 @@ type Startup(config) =
         |> Async.RunSynchronously
         |> ignore<Result<unit, string>>
 
-    do // check Users
-        Startup.checkUsersAsync (persistenceFactory, System(nameof Startup), logger)
-        |> Async.RunSynchronously
+    // TODO-STARTUP: Create some sort of UserCache...
+    let users =
+        match
+            Startup.readUsersAsync (persistenceFactory, System(nameof Startup), logger)
+            |> Async.RunSynchronously
+        with
+        | Ok users -> users
+        | Error error ->
+            logger.Fatal("...error reading {User}s: {error}", nameof User, error)
+            failwith $"Fatal error during {nameof Startup}: {error}"
+
+    // TODO-STARTUP: Create some sort of SweepstakeCache...
+    let sweepstakes =
+        match
+            Startup.readSweepstakesAsync (persistenceFactory, System(nameof Startup), logger)
+            |> Async.RunSynchronously
+        with
+        | Ok sweepstakes -> sweepstakes
+        | Error error ->
+            logger.Fatal("...error reading {Sweepstake}s: {error}", nameof Sweepstake, error)
+            failwith $"Fatal error during {nameof Startup}: {error}"
 
     let todosApi ctx = {
         Shared.getTodos = fun () -> async { return Storage.todos |> List.ofSeq }

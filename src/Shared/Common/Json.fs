@@ -25,7 +25,7 @@ module Json =
         Json(Encode.Auto.toString<'a> (spaceCount, value, caseStrategy, extraCoders))
 
     let inline fromJson<'a> (Json json) =
-        decode.Auto.fromString<'a> (json, caseStrategy, extraCoders)
+        Decode.Auto.fromString<'a> (json, caseStrategy, extraCoders)
 #else
     let encode<'a> value =
         Json(Encode.Auto.toString<'a> (spaceCount, value, caseStrategy, extraCoders))
